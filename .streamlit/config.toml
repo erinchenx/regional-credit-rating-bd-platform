@@ -1,0 +1,16 @@
+[theme]
+# --- 核心颜色 ---
+primaryColor = "#607D8B" 
+
+# --- 背景与文字 ---
+backgroundColor = "#FDFCFB"
+secondaryBackgroundColor = "#F5F2F0"
+textColor = "#1F1F1F"
+
+# --- 字体设置 ---
+font = "sans serif"
+
+[server]
+# --- 保存后自动刷新 ---
+runOnSave = true
+

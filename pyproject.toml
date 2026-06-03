@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=42"]       # 用 setuptools 这个工具来打包
+build-backend = "setuptools.build_meta"  # 具体用哪个接口
+
+[project]
+name = "credit-indicators"          # Python 包名（与 GitHub 仓库名无关）
+version = "0.1.0"                   # 版本号
+
+dependencies = [
+    "numpy",                        # 数值计算
+    "pandas",                       # 数据处理
+    "plotly",                       # 交互式可视化
+    "streamlit",                    # 前端看板框架
+    "openpyxl",                     # 读写 Excel 文件
+    "duckdb",                       # 嵌入式 OLAP 引擎，SQL 视图主引擎
+    "pyarrow",                      # Parquet 读写，列式存储支撑层
+    "scikit-learn",                 # 机器学习（如有聚类分析模块）
+    "xlsxwriter",                   # Excel 导出（报告下载功能）
+]
+
+[tool.setuptools.packages.find]
+include = ["models*", "app*"]       # 只打包 models/ 和 app/ 目录，排除 scripts/、data/ 等        

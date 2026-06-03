@@ -1,0 +1,12 @@
+{
+  "active_bond_snapshot": "20230216",
+  "active_fiscal_year": "2021",
+  "updated_at": "2026-06-02T20:29:20",
+  "bond_snapshots_available": [
+    "20230216"
+  ],
+  "dqc_report": [
+    "数据质量提示：债券文件「全国城投债数据_WIND截止20230216.xlsx」中「发行人中文名称」缺失 2 条记录（缺失率 0.0%），已自动剔除。"
+  ],
+  "note": "修改 active_bond_snapshot 的值可切换到任意历史快照版本，然后重新运行 build_warehouse.py --activate <版本号> 更新视图。"
+}

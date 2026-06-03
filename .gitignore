@@ -1,0 +1,39 @@
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 环境变量
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# 包构建产物
+*.egg-info/
+credit_indicators.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit 密钥
+.streamlit/secrets.toml
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+logs/
