@@ -37,3 +37,7 @@ desktop.ini
 # 日志
 *.log
 logs/
+
+
+# 忽略由 scripts/build_warehouse.py 动态生成的和环境绑定的文件
+data/serving/
