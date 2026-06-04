@@ -162,9 +162,11 @@ def build_bond_parquet(bond_excel_path: Path) -> tuple[Path,list]:
         )
     snapshot_date = date_match.group()
     parquet_path  = BOND_LAKE_DIR / f"bond_{snapshot_date}.parquet"
-
+    
+    # 如果检测到目标快照Parquet已存在，则直接return拦截，中断后续再次读取excel、dqc、再次生成parquet等流程
     if parquet_path.exists():
         logger.info(f"[Bond] {parquet_path.name}文件已存在，无需再次转换，跳过。")
+        return parquet_path, [] 
 
     logger.info(f"[Bond] 读取 Excel：{bond_excel_path.name}")
     df = pd.read_excel(bond_excel_path, sheet_name=0)
