@@ -4,19 +4,34 @@ venv/
 env/
 
 # 环境变量
-.env
+.env*
+!.env.example
 
 # Python
 __pycache__/
+.python-version
 *.py[cod]
 *.pyo
 *.pyd
 
 # 包构建产物
 *.egg-info/
-credit_indicators.egg-info/
+*.egg
 dist/
 build/
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 类型检查
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器备份文件
+*.bak
+*.orig
 
 # IDE
 .vscode/
@@ -38,6 +53,5 @@ desktop.ini
 *.log
 logs/
 
-
-# 忽略由 scripts/build_warehouse.py 动态生成的和环境绑定的文件
+# 忽略由 scripts/build_warehouse.py 动态生成的和环境绑定的文件(DuckDB服务层)
 data/serving/
