@@ -1237,6 +1237,7 @@ with tabs[3]:
             SELECT
                 主承销商,
                 已承做主体数,
+                已承做主体列表,
                 共同客户数,
                 共同客户列表,
                 合作等级
@@ -1263,7 +1264,7 @@ with tabs[3]:
 
     st.markdown(f'<div class="sec-title">主承销商共同客户分析</div><div class="sec-note" style="margin-top:-5px;">— {partner_ag} 在当前选择范围内的主体客户共有<b>{len(my_issuers)}</b> 家</div>', unsafe_allow_html=True)
     if not partner_df.empty and "共同客户数" in partner_df.columns:
-        st.dataframe(partner_df[["主承销商","已承做主体数","共同客户数","合作等级","共同客户列表"]], use_container_width=True, height=360, hide_index=True,
+        st.dataframe(partner_df[["主承销商","已承做主体数","已承做主体列表","共同客户数","合作等级","共同客户列表"]], use_container_width=True, height=360, hide_index=True,
                      column_config={"共同客户数": st.column_config.ProgressColumn(min_value=0, max_value=max(int(partner_df["共同客户数"].max()), 1), format="%d", color="#2D5A5E")})
     else:
         st.info("当前筛选条件下无主承销商数据。")
@@ -1308,7 +1309,7 @@ with tabs[4]:
 
     CASE_COL_MAP = {"序号": "序号", "发行人中文名称": "发行人中文名称", "城市": "城市",
                     FISCAL_COL: "一般公共预算收入(亿元)", "城投行政级别": "行政级别", "主体评级": "主体评级",
-                    "证券代码": "证券代码", "证券简称": "证券简称", "Wind债券二级分类": "Wind债券二级分类",
+                    "证券代码": "证券代码", "证券简称": "证券简称", "主承销商": "主承销商","Wind债券二级分类": "Wind债券二级分类",
                     "发行总额": "发行总额(亿元)", "票面利率": "票面利率(%)"}
     case_disp = case_df[[c for c in CASE_COL_MAP if c in case_df.columns]].rename(columns=CASE_COL_MAP)
 

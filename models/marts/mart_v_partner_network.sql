@@ -71,7 +71,8 @@ uw_stats AS (
     SELECT
         省份,
         承销商,
-        COUNT(DISTINCT 发行人中文名称) AS 已承做主体数
+        COUNT(DISTINCT 发行人中文名称) AS 已承做主体数,
+        string_agg(DISTINCT 发行人中文名称, '、') AS 已承做主体列表
     FROM underwriters
     GROUP BY 省份, 承销商
 ),
@@ -97,6 +98,7 @@ SELECT
     COALESCE(c.评级机构, '未知评级机构')           AS 评级机构,
     s.承销商                                       AS 主承销商,
     s.已承做主体数,
+    s.已承做主体列表,
     COALESCE(c.共同客户数,   0)                    AS 共同客户数,
     COALESCE(c.共同客户列表, '')                   AS 共同客户列表,
     CASE
