@@ -1074,8 +1074,8 @@ with tabs[2]:
 
         if _using_duckdb:
             # DuckDB 路径：从原始主体视图直接计算分位数（支持"全部"聚合）
-            _and_parts = ["省份 = ?"]
-            _params = [prov_name]
+            _and_parts = ["省份 LIKE ?"]
+            _params = [f"%{prov_name[:2]}%"]
             if _city_param != "全部":
                 _and_parts.append("城市 = ?"); _params.append(_city_param)
             if _level_param != "全部":
@@ -1161,7 +1161,23 @@ with tabs[2]:
                              column_config={c: st.column_config.NumberColumn(format="%.1f") for c in bt.columns if c != "指标"})
                 st.caption("★★★ >Q3(75%) | ★★ >中位 | ★ >Q1(25%) | ✗ <Q1")
         else:
-            st.warning("当前筛选组合暂无历史数据，请调整条件。")
+            st.markdown(
+                    """
+                    <div style="
+                        padding: 10px 6px;
+                        background-color: #F5F2F0;
+                        color: #607D8B;
+                        line-height: 1.4;
+                        border-left: 4px solid #607D8B;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        margin: 10px 0;
+                    ">
+                        <b>提示</b>：当前筛选组合暂无历史数据，请调整条件。
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
     with sim_c2:
         st.markdown("**✏️ 输入待评估主体财务数据**")

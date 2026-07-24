@@ -89,8 +89,13 @@ AGENCY_NORMALIZE: dict[str, str] = {
 
 # 行政级别 & 主体评级的量化映射（供后续排序使用）
 LEVEL_ORDER: dict[str, int] = {
-    "省级": 6, "地市级": 5, "国家新区": 4,
-    "地市(开发区)": 3, "归属区县级开发区": 2, "区县级": 1,
+    "省级": 7, 
+    "省(开发区)级": 6, 
+    "地市级": 5, 
+    "国家新区级": 4,
+    "地市(开发区)级": 3, 
+    "区县(开发区)级": 2, 
+    "区县级": 1,
 }
 RATING_ORDER: dict[str, int] = {
     "AAA": 5, "AA+": 4, "AA": 3, "AA-": 2, "A+": 1, "A": 0,
@@ -104,7 +109,7 @@ BOND_COLS: dict[str, list[str]] = {
     "发行人中文简称":   ["发行人中文简称"],
     "省份":             ["省份"],
     "城市":             ["城市"],
-    "城投行政级别":     ["城投行政级别(YY)", "城投行政级别(Wind)", "城投行政级别"],
+    "城投行政级别":     ["城投行政级别(Wind)", "城投行政级别（Wind）", "城投行政级别"],
     "主承销商":         ["主承销商"],
     "Wind债券二级分类": ["Wind债券二级分类"],
     "发行总额":         ["发行总额\n[单位] 亿元", "发行总额(亿元)", "发行总额 亿元"],
@@ -164,6 +169,14 @@ def _rename_bond_columns(df: pd.DataFrame) -> pd.DataFrame:
     for std_name in BOND_COLS:
         if std_name not in df.columns:
             df[std_name] = np.nan
+            
+    # Wind 行政级别原始值不带"级"后缀，统一补上（如 地市→地市级）
+    if "城投行政级别" in df.columns:
+        df["城投行政级别"] = (
+            df["城投行政级别"]
+            .astype("string")  # 确保 VARCHAR，避免全 NaN 时退化为 float64
+            .map(lambda v: v + "级" if isinstance(v, str) and not v.endswith("级") else v)
+        )
     return df
 
 

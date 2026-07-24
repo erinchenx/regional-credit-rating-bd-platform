@@ -32,8 +32,13 @@ RATING_ORDER: dict[str, int] = {
     "AAA": 5, "AA+": 4, "AA": 3, "AA-": 2, "A+": 1, "A": 0,
 }
 LEVEL_ORDER: dict[str, int] = {
-    "省级": 6, "地市级": 5, "国家新区": 4,
-    "地市(开发区)": 3, "归属区县级开发区": 2, "区县级": 1,
+    "省级": 7,
+    "省(开发区)级": 6,
+    "地市级": 5,
+    "国家新区级": 4,
+    "地市(开发区)级": 3,
+    "区县(开发区)级": 2,
+    "区县级": 1,
 }
 FISCAL_BANDS: list[tuple[str, float, float]] = [
     ("0-100亿",    0,    100),
@@ -404,7 +409,7 @@ def mart_partner_network(
 
     输出：
       (result_df, my_issuers_set)
-        result_df 列：主承销商 | 共同客户数 | 已承做主体数 | 共同客户列表 | 合作等级
+        result_df 列：主承销商 | 已承做主体数 | 已承做主体列表 | 共同客户数 |共同客户列表 | 合作等级
         my_issuers_set：我方评级机构的发行人集合
     """
     scope = df.loc[:, ~df.columns.duplicated()].copy()
