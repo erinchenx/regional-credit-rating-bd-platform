@@ -35,12 +35,16 @@ class ColorWarningFormatter(logging.Formatter):
 logging.getLogger().handlers.clear() #删掉之前的handler
 #Streamlit 每次热重载都会重新执行main.py，每次执行都会追加一个新handler，时间长了还是会出现重复打印。
 #留着 handlers.clear() 可以防止这个问题，没有副作用，保留更稳妥。
+
 handler = logging.StreamHandler()
 handler.setFormatter(ColorWarningFormatter(
     "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 ))
 logging.getLogger().addHandler(handler)
 logging.getLogger().setLevel(logging.WARNING)
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # ── 导入三层模型 ──────────────────────────────
 from models.staging.stg_data import (
@@ -214,8 +218,10 @@ html, body, [class*="css"] {
     padding-right: 15px !important;
 }
 
-div[data-baseweb="tab-highlight"] { background-color: #1a3a3a !important; height: 2px !important; width: 100% !important; }
+
 div[data-baseweb="tab-border"]    { background-color: #d1e0de !important; }
+[data-testid="stAlert"] { padding: 0.4rem 1rem !important; }
+[data-testid="stAlert"] p { margin: 0 !important; }
 .sec-title { font-size: 18px; font-weight: 600; color: #1a3a3a; margin: 5px 0 5px; }
 .sec-note  { font-size: 15px; color: #6a8a88; margin-bottom: 8px; line-height: 1.5; }
 .rec-g { background: #f1f8f1; border-left: 4px solid #3d8c40; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; color: #1a3a3a; }
@@ -954,20 +960,22 @@ with tabs[0]:
 
     st.markdown("---")
     st.markdown('<div class="sec-title">评级机构竞争格局</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-note">数字 = 各机构在该分析维度的受评主体数（去重）；财力指地方一般公共预算收入，均采用全口径</div>', unsafe_allow_html=True)
+   
     dim_options = {f"按{FISCAL_YEAR}年财力水平": "fiscal", "按行政级别": "level", "按主体评级": "rating", "按地区位置": "city"}
     _dc, _ac = st.columns(2)
     with _dc: dim_lbl = st.selectbox("筛选分析维度", list(dim_options.keys()), key="comp_dim_tab0")
     with _ac: my_ag_comp = st.selectbox("我方评级机构（第一行）", actual_ags if actual_ags else [""], key="comp_ag_tab0")
     dim = dim_options[dim_lbl]
-
+    st.markdown('<div class="sec-note">热力图中：数字 = 各机构在该分析维度的主体客户数（去重）；财力指地方一般公共预算收入，均采用全口径</div>', unsafe_allow_html=True)
     fig_heat, matrix, all_ags_list, cats = fig_comp_heatmap(df_sc, my_ag_comp, dim)
     if fig_heat:
         if dim == "city" and len(cats) > 1:
             fig_heat.update_xaxes(tickangle=-45, tickfont=dict(size=10, color="#1a3a3a"))
             fig_heat.update_layout(margin=dict(b=80))
-        st.plotly_chart(fig_heat, use_container_width=True, config=PLOTLY_CFG)
 
+
+        st.plotly_chart(fig_heat, use_container_width=True, config=PLOTLY_CFG)
+        
         my_scores = {c: matrix.get(my_ag_comp, {}).get(c, 0) for c in cats}
         rank_rows = []
         for c in cats:
@@ -979,7 +987,7 @@ with tabs[0]:
                                "我方主体数": my_scores[c], "我方排名": f"No.{my_rank}",
                                "我方市占率": f"{my_scores[c]/total_c:.0%}" if total_c else "0%"})
         if rank_rows: st.dataframe(pd.DataFrame(rank_rows), use_container_width=True, hide_index=True)
-
+        
         strong = [c for c in cats if my_scores[c]>0 and all(my_scores[c]>=matrix.get(ag,{}).get(c,0) for ag in all_ags_list if ag!=my_ag_comp)]
         weak   = [c for c in cats if my_scores[c]>0 and sum(1 for ag in all_ags_list if ag!=my_ag_comp and matrix.get(ag,{}).get(c,0)>my_scores[c])>=2]
         blank  = [c for c in cats if my_scores[c]==0]
@@ -1024,7 +1032,7 @@ with tabs[1]:
     if sel_rt   != "全部评级": df_show = df_show[df_show["主体评级"]==sel_rt]
     df_show["序号"] = range(1, len(df_show)+1)
 
-    disp_cols = [c for c in ["序号","发行人中文名称","城市",FISCAL_COL,"城投行政级别","主体评级","主体评级机构","总资产","净资产","营业收入","净利润","资产负债率","财务报告期"] if c in df_show.columns]
+    disp_cols = [c for c in ["序号","发行人中文名称","实际控制人","城市",FISCAL_COL,"城投行政级别","主体评级","主体评级机构","总资产","净资产","营业收入","净利润","资产负债率","财务报告期"] if c in df_show.columns]
     df_disp = df_show[disp_cols].rename(columns={FISCAL_COL: FISCAL_DISPLAY})
 
     total_issuers = len(df_show)
@@ -1055,26 +1063,63 @@ with tabs[2]:
     with sim_c1:
         st.markdown("**📍 定位目标市场**")
         sim_city = st.selectbox("目标城市", ["全省（不限城市）"] + _cities_by_fiscal(sc_zt), key="sim_city")
-        sim_lv   = st.selectbox("行政级别", ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="sim_lv")
-        sim_rt   = st.selectbox("目标主体评级（参照）", ["全部信用级别"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values], key="sim_rt")
+        sim_lv   = st.selectbox("目标行政级别", ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="sim_lv")
+        sim_rt   = st.selectbox("目标主体评级", ["全部主体级别"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values], key="sim_rt")
 
         # ── 准入门槛：DuckDB View 优先，pandas 降级 ──────────────
         _city_param   = "全部" if sim_city == "全省（不限城市）" else sim_city
         _level_param  = "全部" if sim_lv   == "全部行政级别"     else sim_lv
-        _rating_param = "全部" if sim_rt   == "全部信用级别"     else sim_rt
+        _rating_param = "全部" if sim_rt   == "全部主体级别"     else sim_rt
 
 
         if _using_duckdb:
-            # DuckDB 路径：查询 v_financial_bench
-            _where, _params = _build_where({
-                "城市":         _city_param if _city_param != "全部" else "",
-                "城投行政级别": _level_param if _level_param != "全部" else "",
-                "主体评级":     _rating_param if _rating_param != "全部" else "",
-            })
-            _bench_df = query_duckdb(
-                f"SELECT * FROM v_financial_bench{_where} LIMIT 1",
-                _params if _params else None
-            )
+            # DuckDB 路径：从原始主体视图直接计算分位数（支持"全部"聚合）
+            _and_parts = ["省份 = ?"]
+            _params = [prov_name]
+            if _city_param != "全部":
+                _and_parts.append("城市 = ?"); _params.append(_city_param)
+            if _level_param != "全部":
+                _and_parts.append("城投行政级别 = ?"); _params.append(_level_param)
+            if _rating_param != "全部":
+                _and_parts.append("主体评级 = ?"); _params.append(_rating_param)
+            _and_clause = (" AND " + " AND ".join(_and_parts)) if _and_parts else ""
+            _bench_sql = f"""
+                SELECT
+                    COUNT(*) AS 样本数,
+                    ROUND(MIN(总资产), 2) AS 总资产_最小,
+                    ROUND(QUANTILE_CONT(总资产, 0.25), 2) AS 总资产_Q1,
+                    ROUND(MEDIAN(总资产), 2) AS 总资产_中位,
+                    ROUND(AVG(总资产), 2) AS 总资产_均值,
+                    ROUND(QUANTILE_CONT(总资产, 0.75), 2) AS 总资产_Q3,
+                    ROUND(MAX(总资产), 2) AS 总资产_最大,
+                    ROUND(MIN(净资产), 2) AS 净资产_最小,
+                    ROUND(QUANTILE_CONT(净资产, 0.25), 2) AS 净资产_Q1,
+                    ROUND(MEDIAN(净资产), 2) AS 净资产_中位,
+                    ROUND(AVG(净资产), 2) AS 净资产_均值,
+                    ROUND(QUANTILE_CONT(净资产, 0.75), 2) AS 净资产_Q3,
+                    ROUND(MAX(净资产), 2) AS 净资产_最大,
+                    ROUND(MIN(营业收入), 2) AS 营业收入_最小,
+                    ROUND(QUANTILE_CONT(营业收入, 0.25), 2) AS 营业收入_Q1,
+                    ROUND(MEDIAN(营业收入), 2) AS 营业收入_中位,
+                    ROUND(AVG(营业收入), 2) AS 营业收入_均值,
+                    ROUND(QUANTILE_CONT(营业收入, 0.75), 2) AS 营业收入_Q3,
+                    ROUND(MAX(营业收入), 2) AS 营业收入_最大,
+                    ROUND(MIN(净利润), 2) AS 净利润_最小,
+                    ROUND(QUANTILE_CONT(净利润, 0.25), 2) AS 净利润_Q1,
+                    ROUND(MEDIAN(净利润), 2) AS 净利润_中位,
+                    ROUND(AVG(净利润), 2) AS 净利润_均值,
+                    ROUND(QUANTILE_CONT(净利润, 0.75), 2) AS 净利润_Q3,
+                    ROUND(MAX(净利润), 2) AS 净利润_最大,
+                    ROUND(MIN(资产负债率), 2) AS 负债率_最小,
+                    ROUND(QUANTILE_CONT(资产负债率, 0.25), 2) AS 负债率_Q1,
+                    ROUND(MEDIAN(资产负债率), 2) AS 负债率_中位,
+                    ROUND(AVG(资产负债率), 2) AS 负债率_均值,
+                    ROUND(QUANTILE_CONT(资产负债率, 0.75), 2) AS 负债率_Q3,
+                    ROUND(MAX(资产负债率), 2) AS 负债率_最大
+                FROM int_v_issuer_enriched
+                WHERE 省份 IS NOT NULL AND TRIM(主体评级) != ''{_and_clause}
+            """
+            _bench_df = query_duckdb(_bench_sql, _params if _params else None)
 
 
             # 将 Macro 宽表结果转换为 mart_financial_bench 返回的字典格式
@@ -1120,28 +1165,43 @@ with tabs[2]:
 
     with sim_c2:
         st.markdown("**✏️ 输入待评估主体财务数据**")
-        inp_as  = st.number_input("总资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", key="inp_as")
-        inp_eq  = st.number_input("净资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", key="inp_eq")
-        inp_rv  = st.number_input("营业收入（亿元）", min_value=0.0, step=0.1, format="%.1f", key="inp_rv")
-        inp_pf  = st.number_input("净利润（亿元）",   min_value=0.0, step=0.1, format="%.1f", key="inp_pf")
-        auto_lev = round((inp_as - inp_eq) / inp_as * 100, 1) if inp_as > 0 else None
+        inp_as  = st.number_input("总资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_as")
+        inp_eq  = st.number_input("净资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_eq")
+        inp_rv  = st.number_input("营业收入（亿元）", min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_rv")
+        inp_pf  = st.number_input("净利润（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_pf")
+        auto_lev = round((inp_as - inp_eq) / inp_as * 100, 1) if (inp_as and inp_as > 0 and inp_eq is not None) else None
         if auto_lev is not None:
-            st.info(f"📐 自动计算：资产负债率 = **{auto_lev}%**")
             st.session_state["inp_lev"] = auto_lev
-        inp_lev = st.number_input("资产负债率（%）— 已自动计算，可手动覆盖", min_value=0.0, max_value=100.0, step=0.1, format="%.1f", key="inp_lev")
+        inp_lev = st.number_input("资产负债率（%）— 自动计算，可手动覆盖", min_value=0.0, max_value=100.0, step=0.1, format="%.1f", value=None, key="inp_lev")
 
-        eval_btn = st.button("▶ 生成评估报告", type="primary", use_container_width=True)
+        eval_btn = st.button("▶ 开始评估财务指标", type="primary", use_container_width=True)
         if eval_btn and bench["n"] > 0:
             inp_vals = {"总资产": inp_as or None, "净资产": inp_eq or None, "营业收入": inp_rv or None, "净利润": inp_pf or None, "资产负债率": inp_lev or None}
             scored = [{"指标": col, "输入值": val, "市场中位": bench[col]["median"], "得分": _score_val(val, bench[col], col)} for col, val in inp_vals.items() if val and col in bench]
             if not scored:
-                st.warning("请至少填写一项财务数据")
+                st.markdown(
+                    """
+                    <div style="
+                        padding: 10px 6px;
+                        background-color: #F5F2F0;
+                        color: #607D8B;
+                        line-height: 1.4;
+                        border-left: 4px solid #607D8B;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        margin: 10px 0;
+                    ">
+                        <b>提示</b>：请填写财务指标后再发起评估。
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
             else:
                 ratio = sum(r["得分"] for r in scored) / (len(scored) * 3)
                 sm = {3: "★★★", 2: "★★", 1: "★", 0: "✗"}
                 cm = {3: "超75%分位，领先市场", 2: "超中位，稳健", 1: "超25%分位，偏弱", 0: "低于Q1，差距较大"}
                 res_rows = [{"指标": r["指标"], "输入值": f"{r['输入值']}{'%' if r['指标']=='资产负债率' else '亿'}", "市场中位": f"{r['市场中位']}{'%' if r['指标']=='资产负债率' else '亿'}", "竞争力": sm[r["得分"]], "评价": cm[r["得分"]]} for r in scored]
-                st.markdown("**📋 评估报告**")
+                st.markdown("**📋 财务指标评估结果**")
                 st.dataframe(pd.DataFrame(res_rows), use_container_width=True, hide_index=True)
                 st.progress(ratio)
                 score_pct = int(ratio * 100)
@@ -1252,7 +1312,7 @@ with tabs[4]:
                     "发行总额": "发行总额(亿元)", "票面利率": "票面利率(%)"}
     case_disp = case_df[[c for c in CASE_COL_MAP if c in case_df.columns]].rename(columns=CASE_COL_MAP)
 
-    st.metric(f"{my_ags_case} 受评主体数（当前筛选）", f"{len(case_df)}家")
+    st.metric(f"{my_ags_case} 债项评级数（当前筛选）", f"{len(case_df)}项")
     st.dataframe(case_disp, use_container_width=True, height=540, hide_index=True,
                  column_config={
                      "发行总额(亿元)":        st.column_config.NumberColumn(format="%.2f 亿"),

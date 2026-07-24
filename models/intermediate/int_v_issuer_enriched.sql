@@ -36,6 +36,7 @@ deduped_issuers AS (
     SELECT DISTINCT ON (发行人中文名称)
         发行人中文名称,
         发行人中文简称,
+        实际控制人,
         省份,
         城市,
         城投行政级别,
