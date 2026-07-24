@@ -45,8 +45,8 @@
 ```
 原始层 (Raw)
   └── Excel 文件，原封不动保留，作为数据证据
-       data/1发债数据/全国城投债数据_WIND截止20230216.xlsx
-       data/2财力数据/2021年四川省财力.xlsx ...
+       data/raw/bond/全国城投债数据_WIND截止20230216.xlsx
+       data/raw/fiscal/2021年四川省财力.xlsx ...
             │
             │  scripts/build_warehouse.py（ETL，一次性运行）
             │  ① pd.read_excel
@@ -69,7 +69,7 @@
             └──► Tableau / Power BI / DBeaver（直连 .duckdb 文件）
 ```
 
-> 应用层采用双引擎架构（DuckDB 主引擎 + pandas 降级路径），确保仓库未初始化时应用不崩溃，自动降级运行。详见[双引擎设计说明](#双引擎设计说明)。 
+> 应用层采用双引擎架构（DuckDB 主引擎 + pandas 降级路径），确保仓库未初始化时应用不崩溃，自动降级运行。详见[双引擎设计说明](#双引擎设计说明)。
 
 **设计原则：**
 
@@ -114,14 +114,15 @@
 │       └── mart_v_partner_network.sql          # 展业伙伴网络（共同客户分析）
 │
 ├── data/
-│   ├── 1发债数据/               # 【原始层】债券 Excel，原封不动，不修改
-│   │   └── 全国城投债数据_WIND截止20230216.xlsx
-│   ├── 2财力数据/               # 【原始层】各省财力 Excel
-│   │   ├── 2021年四川省财力.xlsx          
-│   │   └── ...（共 12 省）
-│   │       
+│   ├── raw/                     # 【原始层】债券 Excel 及 各省财力 Excel
+│   │   ├── bond/         
+│   │   │    └── 全国城投债数据_WIND截止20230216.xlsx
+│   │   └── fiscal/      
+│   │        ├── 2021年四川省财力.xlsx    
+│   │        └── ...（共 12 省）
+│   │  
 │   ├── warehouse/               # 【标准层】Parquet 数据湖
-│   │   ├── bond/          
+│   │   ├── bond/        
 │   │   │   └── bond_20230216.parquet   #  由 build_warehouse.py 运行后生成
 │   │   └── fiscal/
 │   │       ├── 四川省_2021.parquet      #  由 build_warehouse.py 运行后生成
@@ -212,7 +213,7 @@ python -m streamlit run app/main.py
 ### 收到新期债券数据
 
 ```bash
-# 1. 将新 Excel 放入 data/1发债数据/ 目录
+# 1. 将新 Excel 放入 data/raw/bond/ 目录
 #    文件名需包含 8 位日期，如：全国城投债数据_WIND截止20240101.xlsx
 
 # 2. 重新运行 ETL 脚本
@@ -265,12 +266,10 @@ python scripts/build_warehouse.py --activate 20230216
 
 **读取策略（双模式自动切换）：**
 
-
-| 条件                            | 读取方式                  | 速度       |
-| ----------------------------- | --------------------- | -------- |
-| `credit_indicators.duckdb` 存在 | DuckDB 读取 `v_bond` 视图 | ~350ms   |
-| DuckDB 不存在或读取失败               | 直接读取 Excel            | ~7,000ms |
-
+| 条件                              | 读取方式                   | 速度     |
+| --------------------------------- | -------------------------- | -------- |
+| `credit_indicators.duckdb` 存在 | DuckDB 读取`v_bond` 视图 | ~350ms   |
+| DuckDB 不存在或读取失败           | 直接读取 Excel             | ~7,000ms |
 
 **主要函数：**
 
@@ -370,20 +369,18 @@ else:
 
 ### 各 Tab 双引擎对照
 
-
-| Tab       | 功能模块       | DuckDB 主引擎                       | pandas 降级路径                  | 备注                        |
-| --------- | ---------- | -------------------------------- | ---------------------------- | ------------------------- |
-| **全局**    | 省份 KPI     | `v_province_kpi`                 | `len(sc_zt)` + `df_sc.sum()` |                           |
-| **Tab 0** | 评级机构排名表    | `v_agency_market_share`          | `mart_agency_stats()`        |                           |
-| **Tab 0** | 饼图 / 柱状图   | 从 `v_agency_market_share` 派生     | 从排名表派生                       |                           |
-| **Tab 0** | 竞争热力矩阵（4维） | `v_agency_competitive_landscape` | `mart_competition_matrix()`  | 动态透视仅 pandas，DuckDB 提供数据源 |
-| **Tab 1** | 主体地图 / 名单表 | `v_issuer_profile`               | `int_build_issuer_view()`    |                           |
-| **Tab 1** | 城市主体明细     | `v_city_credit_overview`         | 实时 `groupby`                 |                           |
-| **Tab 2** | 准入门槛分位数    | `v_financial_bench`              | `mart_financial_bench()`     |                           |
-| **Tab 3** | 主承销商排名     | `v_underwriter_stats`（先聚合至省级）    | `mart_underwriter_stats()`   |                           |
-| **Tab 3** | 展业帮手圈      | `v_partner_network` JOIN 省份城市集合  | `mart_partner_network()`     |                           |
-| **Tab 4** | 发债案例明细     | `v_bond` WHERE 省份+机构+城市          | 筛选 `df_sc`                   |                           |
-
+| Tab             | 功能模块            | DuckDB 主引擎                           | pandas 降级路径                  | 备注                                 |
+| --------------- | ------------------- | --------------------------------------- | -------------------------------- | ------------------------------------ |
+| **全局**  | 省份 KPI            | `v_province_kpi`                      | `len(sc_zt)` + `df_sc.sum()` |                                      |
+| **Tab 0** | 评级机构排名表      | `v_agency_market_share`               | `mart_agency_stats()`          |                                      |
+| **Tab 0** | 饼图 / 柱状图       | 从`v_agency_market_share` 派生        | 从排名表派生                     |                                      |
+| **Tab 0** | 竞争热力矩阵（4维） | `v_agency_competitive_landscape`      | `mart_competition_matrix()`    | 动态透视仅 pandas，DuckDB 提供数据源 |
+| **Tab 1** | 主体地图 / 名单表   | `v_issuer_profile`                    | `int_build_issuer_view()`      |                                      |
+| **Tab 1** | 城市主体明细        | `v_city_credit_overview`              | 实时`groupby`                  |                                      |
+| **Tab 2** | 准入门槛分位数      | `v_financial_bench`                   | `mart_financial_bench()`       |                                      |
+| **Tab 3** | 主承销商排名        | `v_underwriter_stats`（先聚合至省级） | `mart_underwriter_stats()`     |                                      |
+| **Tab 3** | 展业帮手圈          | `v_partner_network` JOIN 省份城市集合 | `mart_partner_network()`       |                                      |
+| **Tab 4** | 发债案例明细        | `v_bond` WHERE 省份+机构+城市         | 筛选`df_sc`                    |                                      |
 
 > **说明**：`mart_competition_matrix()` 的四维动态透视（城市 / 行政级别 / 评级 / 财力段）需要在运行时确定列结构，不适合固化为静态 SQL 视图，因此该模块始终使用 pandas 计算，DuckDB 仅提供原始数据。
 
@@ -393,20 +390,18 @@ else:
 
 `data/serving/credit_indicators.duckdb` 内置 10 个业务视图，可直接用 Tableau / Power BI / DBeaver / Python 连接查询。所有视图均为全量宽表，自带维度列，BI 工具通过筛选器切片即可完成下钻分析。
 
-
-| 视图名                              | 说明                              | 粒度                     |
-| -------------------------------- | ------------------------------- | ---------------------- |
-| `v_bond`                         | 当前激活版本的完整债券数据                   | 一只债一行                  |
-| `v_fiscal`                       | 所有省份财力数据                        | 一城市一行                  |
-| `v_province_kpi`                 | 省份 KPI 汇总（主体数、发行总额、覆盖城市等 6 个指标） | 一省一行                   |
-| `v_agency_market_share`          | 评级机构省内市场份额（省内市占率、债项主体比）         | 一省一机构一行                |
-| `v_agency_competitive_landscape` | 主体画像宽表（含城市、财力区间，供竞争热力矩阵使用）      | 一主体一行                  |
-| `v_issuer_profile`               | 去重主体视图（含财务指标、城市财力）              | 一主体一行                  |
-| `v_city_credit_overview`         | 城市信用概览（省内财力排名、评级×级别主体分布）        | 一城市一主体评级一行政级别一行        |
-| `v_financial_bench`              | 财务基准分位数（五指标六分位，全组合宽表）           | 一省一城市一行政级别一主体评级一行      |
-| `v_underwriter_stats`            | 主承销商排名（含已承做主体数、发行倍数，全维度宽表）      | 一省一城市一级别一评级一财力区间一承销商一行 |
-| `v_partner_network`              | 展业伙伴网络（共同客户数、合作等级）              | 一省一城市一级别一评级机构一承销商一行    |
-
+| 视图名                             | 说明                                                   | 粒度                                         |
+| ---------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| `v_bond`                         | 当前激活版本的完整债券数据                             | 一只债一行                                   |
+| `v_fiscal`                       | 所有省份财力数据                                       | 一城市一行                                   |
+| `v_province_kpi`                 | 省份 KPI 汇总（主体数、发行总额、覆盖城市等 6 个指标） | 一省一行                                     |
+| `v_agency_market_share`          | 评级机构省内市场份额（省内市占率、债项主体比）         | 一省一机构一行                               |
+| `v_agency_competitive_landscape` | 主体画像宽表（含城市、财力区间，供竞争热力矩阵使用）   | 一主体一行                                   |
+| `v_issuer_profile`               | 去重主体视图（含财务指标、城市财力）                   | 一主体一行                                   |
+| `v_city_credit_overview`         | 城市信用概览（省内财力排名、评级×级别主体分布）       | 一城市一主体评级一行政级别一行               |
+| `v_financial_bench`              | 财务基准分位数（五指标六分位，全组合宽表）             | 一省一城市一行政级别一主体评级一行           |
+| `v_underwriter_stats`            | 主承销商排名（含已承做主体数、发行倍数，全维度宽表）   | 一省一城市一级别一评级一财力区间一承销商一行 |
+| `v_partner_network`              | 展业伙伴网络（共同客户数、合作等级）                   | 一省一城市一级别一评级机构一承销商一行       |
 
 **Python 直接查询示例：**
 
@@ -431,15 +426,13 @@ con.close()
 
 ## 技术选型说明
 
-
-| 选型    | 选择                                   | 原因                                                 |
-| ----- | ------------------------------------ | -------------------------------------------------- |
-| 存储格式  | Parquet                              | 列式存储，读取比 Excel 快 20x；开放格式，与引擎无绑定；Snappy 压缩体积缩小 72% |
-| 查询引擎  | DuckDB                               | 嵌入式 OLAP，无需服务器；直接扫描 Parquet；支持标准 SQL；可被 Tableau 直连 |
-| 数据建模  | dbt 分层思维（Staging/Intermediate/Marts） | 每层职责单一，换底层存储只改 Staging 层，上层零修改                     |
-| 缓存策略  | `st.cache_data` + 快照版本号              | DuckDB 模式下缓存 key 为版本号，版本切换时精准失效；Excel 模式下为文件 mtime |
-| UI 框架 | Streamlit                            | 轻量交付，适合数据咨询场景；`st.status` 实现分层进度展示                 |
-
+| 选型     | 选择                                       | 原因                                                                           |
+| -------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
+| 存储格式 | Parquet                                    | 列式存储，读取比 Excel 快 20x；开放格式，与引擎无绑定；Snappy 压缩体积缩小 72% |
+| 查询引擎 | DuckDB                                     | 嵌入式 OLAP，无需服务器；直接扫描 Parquet；支持标准 SQL；可被 Tableau 直连     |
+| 数据建模 | dbt 分层思维（Staging/Intermediate/Marts） | 每层职责单一，换底层存储只改 Staging 层，上层零修改                            |
+| 缓存策略 | `st.cache_data` + 快照版本号             | DuckDB 模式下缓存 key 为版本号，版本切换时精准失效；Excel 模式下为文件 mtime   |
+| UI 框架  | Streamlit                                  | 轻量交付，适合数据咨询场景；`st.status` 实现分层进度展示                     |
 
 ---
 
@@ -463,14 +456,12 @@ con.close()
 
 ### 交付技术逻辑关联图
 
-
-| 交付维度     | 技术支撑                     | 商业收益                             |
-| -------- | ------------------------ | -------------------------------- |
-| **快速交付** | Streamlit 轻量 UI 框架       | 极短上线周期，支持快速原型迭代与 MVP 验证          |
+| 交付维度           | 技术支撑                     | 商业收益                                              |
+| ------------------ | ---------------------------- | ----------------------------------------------------- |
+| **快速交付** | Streamlit 轻量 UI 框架       | 极短上线周期，支持快速原型迭代与 MVP 验证             |
 | **极致性能** | DuckDB 直接扫描 Parquet      | 读取速度比 Excel 快 20 倍，支持十万级债项数据秒级下钻 |
 | **稳定扩展** | dbt 分层（Staging/Int/Mart） | 换底层存储只需修改接入层，逻辑层零成本维护            |
-| **开放互通** | DuckDB 标准 SQL 接口         | 支持与机构现有 BI 系统（Tableau 等）无缝集成     |
-
+| **开放互通** | DuckDB 标准 SQL 接口         | 支持与机构现有 BI 系统（Tableau 等）无缝集成          |
 
 ---
 

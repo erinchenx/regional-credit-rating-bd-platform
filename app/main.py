@@ -83,8 +83,8 @@ def _latest_excel(directory: Path) -> Path:
         raise FileNotFoundError(f"目录 {directory} 下没有找到任何 xlsx 文件")
     return max(files, key=lambda p: p.stat().st_mtime)
 
-BOND_FILE  = _latest_excel(_BASE / "data" / "1发债数据")
-FISCAL_DIR = _BASE / "data" / "2财力数据"
+BOND_FILE  = _latest_excel(_BASE / "data" / "raw" / "bond")
+FISCAL_DIR = _BASE / "data" / "raw" / "fiscal"
 
 # ── 数仓路径（Serving 层）────────────────────────────────────
 DB_PATH      = _BASE / "data" / "serving" / "credit_indicators.duckdb"

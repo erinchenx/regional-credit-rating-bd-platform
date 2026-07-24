@@ -46,7 +46,7 @@ scripts/build_warehouse.py
 
 使用场景：
   - 首次部署：python scripts/build_warehouse.py
-  - 数据更新：收到新 Excel 后，放入 data/1发债数据/，重新运行本脚本
+  - 数据更新：收到新 Excel 后，放入 data/raw/bond/，重新运行本脚本
 
 
 运行方式（从项目根目录）：
@@ -121,8 +121,8 @@ logger = setup_logger()
 # ──────────────────────────────────────────────
 # 路径常量
 # ──────────────────────────────────────────────
-RAW_BOND_DIR    = _PROJECT_ROOT / "data" / "1发债数据"
-RAW_FISCAL_DIR  = _PROJECT_ROOT / "data" / "2财力数据"
+RAW_BOND_DIR    = _PROJECT_ROOT / "data" / "raw" / "bond"
+RAW_FISCAL_DIR  = _PROJECT_ROOT / "data" / "raw" / "fiscal"
 WAREHOUSE_DIR   = _PROJECT_ROOT / "data" / "warehouse"
 BOND_LAKE_DIR   = WAREHOUSE_DIR / "bond"
 FISCAL_LAKE_DIR = WAREHOUSE_DIR / "fiscal"
@@ -563,7 +563,7 @@ if __name__ == "__main__":
         "--bond-file",
         type=str,
         default=None,
-        help="指定债券 Excel 文件名（在 data/1发债数据/ 目录下）",
+        help="指定债券 Excel 文件名（在 data/raw/bond/ 目录下）",
     )
     parser.add_argument(
         "--activate",

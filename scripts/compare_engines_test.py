@@ -60,9 +60,9 @@ from models.staging.stg_data import (
 
 # ── 路径 ──────────────────────────────────────────────────────
 _BASE        = _PROJECT
-BOND_FILE    = max((_BASE / "data" / "1发债数据").glob("*.xlsx"),
+BOND_FILE    = max((_BASE / "data" / "raw" / "bond").glob("*.xlsx"),
                    key=lambda p: p.stat().st_mtime)
-FISCAL_DIR   = _BASE / "data" / "2财力数据"
+FISCAL_DIR   = _BASE / "data" / "raw" / "fiscal"
 DB_PATH      = _BASE / "data" / "serving" / "credit_indicators.duckdb"
 VERSION_FILE = _BASE / "data" / "serving" / "active_version.json"
 _VERSION     = _read_active_version(VERSION_FILE)
