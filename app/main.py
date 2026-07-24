@@ -359,7 +359,7 @@ def fig_bar_ratio(sc_pj: pd.DataFrame) -> go.Figure:
         height=280, margin=dict(t=40, b=40, l=10, r=10),
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",# 将背景设为透明
         yaxis=dict(visible=False, range=[0, df["ratio"].max() * 1.25]),
-        xaxis=dict(showgrid=False, tickfont=dict(size=13, color="#5E7E7C"), linecolor="#D1E0DE"),
+        xaxis=dict(showgrid=False, tickfont=dict(size=13, color="#5E7E7C"), linecolor="white"),
         dragmode=False, hoverlabel=dict(bgcolor="#F4F8F7", bordercolor="#2D5A5E"),
     )
     return fig
