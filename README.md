@@ -115,14 +115,14 @@
 │
 ├── data/
 │   ├── raw/                     # 【原始层】债券 Excel 及 各省财力 Excel
-│   │   ├── bond/         
+│   │   ├── bond/     
 │   │   │    └── 全国城投债数据_WIND截止20230216.xlsx
-│   │   └── fiscal/      
-│   │        ├── 2021年四川省财力.xlsx    
-│   │        └── ...（共 12 省）
+│   │   └── fiscal/  
+│   │        ├── 2021年四川省财力.xlsx  
+│   │        └── ...（共 13 省）
 │   │  
 │   ├── warehouse/               # 【标准层】Parquet 数据湖
-│   │   ├── bond/        
+│   │   ├── bond/    
 │   │   │   └── bond_20230216.parquet   #  由 build_warehouse.py 运行后生成
 │   │   └── fiscal/
 │   │       ├── 四川省_2021.parquet      #  由 build_warehouse.py 运行后生成
@@ -324,10 +324,12 @@ Staging 层
   ├── Schema Check（硬错误）
   │     列名归一化后核心列全为空 → raise ValueError，阻断流程
   ├── Value Check - 关键维度（硬错误）
-  │     发行人/省份/城市 缺失率 ≤2%：自动剔除并警告
-  │                               >2%：raise ValueError
+  │     发行人/省份/城市 缺失率 ≤2%：自动剔除并警告（不中断）
+  │                               >2%：raise ValueError，阻断流程
   └── Value Check - 财务字段（软警告）
-        总资产/净利润等 空值率 >80% → st.warning（不中断）
+  │     总资产/净利润等 空值率 >80% → 警告提示（不中断）
+  └── City-name Check（软警告）
+        财力数据城市名长度 < 2 字符 → 警告提示（不中断）
 
 Intermediate 层
   ├── 关联膨胀检查（硬错误）
@@ -339,6 +341,8 @@ Marts 层
   └── 省级平台财力适配审计（软警告）
         省级平台所在城市财力低于全省中位线 → 标记为"平台行政级别与所属城市财力不匹配"
 ```
+
+> **跳过策略**：`build_warehouse.py` 在 parquet 已存在时仍会执行 DQC 检查并输出质量警告，仅跳过 `to_parquet` 写入步骤，确保数据质量检查信息仍显示在终端及前端。
 
 ---
 

@@ -1398,7 +1398,7 @@ with tabs[4]:
                     "发行总额": "发行总额(亿元)", "票面利率": "票面利率(%)"}
     case_disp = case_df[[c for c in CASE_COL_MAP if c in case_df.columns]].rename(columns=CASE_COL_MAP)
 
-    st.metric(f"{my_ags_case} 债项评级数（当前筛选）", f"{len(case_df)}项")
+    st.metric(f"{my_ags_case} 承做评级的发债案例（当前筛选）", f"{len(case_df)}项")
     st.dataframe(case_disp, use_container_width=True, height=540, hide_index=True,
                  column_config={
                      "发行总额(亿元)":        st.column_config.NumberColumn(format="%.2f 亿"),
