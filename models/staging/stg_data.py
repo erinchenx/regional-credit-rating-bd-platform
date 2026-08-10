@@ -88,7 +88,7 @@ AGENCY_NORMALIZE: dict[str, str] = {
 }
 
 # 行政级别 & 主体评级的量化映射（供后续排序使用）
-LEVEL_ORDER: dict[str, int] = {
+ADMIN_ORDER: dict[str, int] = {
     "省级": 7, 
     "省(开发区)级": 6, 
     "地市级": 5, 
@@ -98,7 +98,9 @@ LEVEL_ORDER: dict[str, int] = {
     "区县级": 1,
 }
 RATING_ORDER: dict[str, int] = {
-    "AAA": 5, "AA+": 4, "AA": 3, "AA-": 2, "A+": 1, "A": 0,
+    "AAA": 9, "AA+": 8, "AA": 7, "AA-": 6,
+    "A+": 5, "A": 4, "A-": 3,
+    "BBB+": 2, "BBB": 1, "BBB-": 0,
 }
 
 # Bond Excel 字段：标准列名 → 可能出现的原始列名（按优先级排列）
@@ -432,7 +434,7 @@ def stg_load_bond_data(
         if col in df.columns:
             df[col] = df[col].apply(_normalize_agency_name)
 
-    df["行政级别量化"] = df["城投行政级别"].map(LEVEL_ORDER).fillna(0)
+    df["行政级别量化"] = df["城投行政级别"].map(ADMIN_ORDER).fillna(0)
     df["主体级别量化"] = df["主体评级"].map(RATING_ORDER).fillna(0)
 
     df, _ = _dqc_bond(df, bond_file)

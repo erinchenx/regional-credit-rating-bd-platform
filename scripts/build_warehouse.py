@@ -78,7 +78,7 @@ from models.staging.stg_data import (
     _normalize_agency_name,
     _dqc_bond,
     _dqc_fiscal,
-    LEVEL_ORDER,
+    ADMIN_ORDER,
     RATING_ORDER,
 )
 
@@ -169,7 +169,7 @@ def build_bond_parquet(bond_excel_path: Path) -> tuple[Path,list]:
         for col in ["主体评级机构", "债项评级机构"]:
             if col in df_check.columns:
                 df_check[col] = df_check[col].apply(_normalize_agency_name)
-        df_check["行政级别量化"] = df_check["城投行政级别"].map(LEVEL_ORDER).fillna(0)
+        df_check["行政级别量化"] = df_check["城投行政级别"].map(ADMIN_ORDER).fillna(0)
         df_check["主体级别量化"] = df_check["主体评级"].map(RATING_ORDER).fillna(0)
         try:
             _, dqc_report = _dqc_bond(df_check, bond_excel_path)
@@ -191,7 +191,7 @@ def build_bond_parquet(bond_excel_path: Path) -> tuple[Path,list]:
             df[col] = df[col].apply(_normalize_agency_name)
 
     # ── 辅助量化列（供下游 SQL ORDER BY 使用）──────────────────────
-    df["行政级别量化"] = df["城投行政级别"].map(LEVEL_ORDER).fillna(0)
+    df["行政级别量化"] = df["城投行政级别"].map(ADMIN_ORDER).fillna(0)
     df["主体级别量化"] = df["主体评级"].map(RATING_ORDER).fillna(0)
 
     # 截断时间戳，日期显示为 2022-09-30（例子）

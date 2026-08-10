@@ -31,7 +31,7 @@ from app.config import MART_PROV_PLATFORM_FISCAL_QUANTILE
 RATING_ORDER: dict[str, int] = {
     "AAA": 5, "AA+": 4, "AA": 3, "AA-": 2, "A+": 1, "A": 0,
 }
-LEVEL_ORDER: dict[str, int] = {
+ADMIN_ORDER: dict[str, int] = {
     "省级": 7,
     "省(开发区)级": 6,
     "地市级": 5,
@@ -291,7 +291,7 @@ def mart_competition_matrix(
 
     elif dimension == "level":
         actual_levels = df["城投行政级别"].dropna().unique().tolist()
-        categories = sorted(actual_levels, key=lambda lv: LEVEL_ORDER.get(lv, -1), reverse=True)
+        categories = sorted(actual_levels, key=lambda lv: ADMIN_ORDER.get(lv, -1), reverse=True)
 
         def get_category(row: dict) -> Optional[str]:
             return row.get("城投行政级别")

@@ -31,7 +31,7 @@ from models.intermediate.int_data import (     # noqa: F401
 from models.marts.mart_credit_indicators import (   # noqa: F401
     FISCAL_BANDS,
     RATING_ORDER,
-    LEVEL_ORDER,
+    ADMIN_ORDER,
     AGENCY_FULLNAME,
     mart_agency_stats,
     mart_underwriter_stats,

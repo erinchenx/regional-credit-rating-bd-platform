@@ -62,7 +62,7 @@ from models.intermediate.int_data import (
 from models.marts.mart_credit_indicators import (
     FISCAL_BANDS,
     RATING_ORDER,
-    LEVEL_ORDER,
+    ADMIN_ORDER,
     AGENCY_FULLNAME,
     mart_competition_matrix,  # 保留：四维热力矩阵，动态透视，不适合固化成 SQL
     mart_financial_bench,     # 保留：Tab 2 pandas 路径（DuckDB 降级时用）
@@ -505,7 +505,7 @@ def build_map_fig(sc_zt: pd.DataFrame, filter_lv="", filter_rt="", fiscal_cities
             for rt in sorted(sub["主体评级"].dropna().unique(), key=lambda r: RATING_ORDER.get(r, -1), reverse=True):
                 rt_s = sub[sub["主体评级"] == rt]
                 lines.append(f"<b>{rt}</b> {len(rt_s)}家：")
-                for lv in sorted(rt_s["城投行政级别"].dropna().unique(), key=lambda l: LEVEL_ORDER.get(l, -1), reverse=True):
+                for lv in sorted(rt_s["城投行政级别"].dropna().unique(), key=lambda l: ADMIN_ORDER.get(l, -1), reverse=True):
                     lines.append(f"  其中{lv} {rt_s[rt_s['城投行政级别']==lv].shape[0]}家")
             lon, lat = CITY_COORDS[city]
             rows.append({"城市": city, "lon": lon, "lat": lat, "n": len(sub), "top_rt": top_rt, "hover": "<br>".join(lines)})
@@ -1072,7 +1072,7 @@ with tabs[1]:
     st.markdown('<div class="sec-title">已评级主体地图分布</div>', unsafe_allow_html=True)
     mc1, mc2 = st.columns(2)
     with mc1:
-        map_lv_opts = ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True)
+        map_lv_opts = ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True)
         map_lv = st.selectbox("筛选行政级别", map_lv_opts, key="map_lv")
     with mc2:
         map_rt_opts = ["全部信用级别"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values]
@@ -1092,7 +1092,7 @@ with tabs[1]:
     st.markdown(f'<div class="sec-title">{prov_name}已评级主体名单</div>', unsafe_allow_html=True)
     f1, f2, f3 = st.columns(3)
     with f1: sel_city = st.selectbox("筛选城市", ["全部城市"] + _cities_by_fiscal(sc_zt), key="zt_city")
-    with f2: sel_lv = st.selectbox("筛选行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="zt_lv")
+    with f2: sel_lv = st.selectbox("筛选行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="zt_lv")
     with f3: sel_rt = st.selectbox("筛选主体评级", ["全部评级"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values], key="zt_rt")
 
     df_show = sc_zt.copy()
@@ -1132,7 +1132,7 @@ with tabs[2]:
     with sim_c1:
         st.markdown("**📍 定位目标市场**")
         sim_city = st.selectbox("目标城市", ["全省（不限城市）"] + _cities_by_fiscal(sc_zt), key="sim_city")
-        sim_lv   = st.selectbox("目标行政级别", ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="sim_lv")
+        sim_lv   = st.selectbox("目标行政级别", ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="sim_lv")
         sim_rt   = st.selectbox("目标主体评级", ["全部主体级别"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values], key="sim_rt")
 
         # ── 准入门槛：DuckDB View 优先，pandas 降级 ──────────────
@@ -1303,7 +1303,7 @@ with tabs[3]:
     pc1, pc2, pc3 = st.columns(3)
     with pc1: partner_ag   = st.selectbox("我方评级机构", actual_ags if actual_ags else ["—"], key="partner_ag")
     with pc2: partner_city = st.selectbox("目标城市", ["全部城市"] + _cities_by_fiscal(sc_zt), key="partner_city")
-    with pc3: partner_lv   = st.selectbox("行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="partner_lv")
+    with pc3: partner_lv   = st.selectbox("行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="partner_lv")
 
     # ── 展业帮手圈：DuckDB View 优先，pandas 降级 ──────────────
     _partner_city  = "" if partner_city == "全部城市" else partner_city
@@ -1382,7 +1382,7 @@ with tabs[4]:
     my_ags_case = st.selectbox("选择评级机构", actual_ags if actual_ags else ["—"], key="case_ag")
     c1c, c2c, c3c = st.columns(3)
     with c1c: case_city = st.selectbox("筛选城市", ["全部城市"] + _cities_by_fiscal(sc_zt), key="case_city")
-    with c2c: case_lv   = st.selectbox("筛选行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: LEVEL_ORDER.get(l,-1), reverse=True), key="case_lv")
+    with c2c: case_lv   = st.selectbox("筛选行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="case_lv")
     with c3c: case_rt   = st.selectbox("筛选主体评级", ["全部信用级别"] + [r for r in RATING_ORDER if r in df_sc["主体评级"].values], key="case_rt")
 
     case_df = df_sc[df_sc["主体评级机构"].fillna("").str.contains(my_ags_case, regex=False)].copy()
