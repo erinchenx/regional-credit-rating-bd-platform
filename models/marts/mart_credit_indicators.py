@@ -166,7 +166,7 @@ def dqc_marts_platform_dismatch(df_marts: pd.DataFrame, province_name: str):
 
     detail_msg = "\n".join(summary_list)
     warning_msg = (
-        f"业务数据提示：{province_name} 存在 {len(summary_list)} 个省级平台"
+        f"{province_name} 存在 {len(summary_list)} 个省级平台"
         f"位于省内低财力城市（排名位于靠后的{MART_PROV_PLATFORM_FISCAL_QUANTILE:.0%}区间）。"
     )
 

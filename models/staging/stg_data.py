@@ -257,17 +257,24 @@ def _dqc_bond(df: pd.DataFrame, source_file: Path) -> tuple[pd.DataFrame, list]:
             if null_rate <= BOND_CRITICAL_NULL_TOLERANCE:
                 # 容忍范围内：剔除并 Streamlit 警告
                 msg = (
-                    f"数据质量提示：债券文件「{file_label}」中「{col}」缺失 {null_count} 条记录（缺失率 {null_rate:.1%}），已自动剔除。"
+                    f"债券文件「{file_label}」中「{col}」缺失 {null_count} 条记录（缺失率 {null_rate:.1%}），已自动剔除。"
                 )
                 logger.warning(msg)
                 dqc_report.append(msg)
-                st.warning(f"数据质量提示：债券文件「{file_label}」中「{col}」缺失 {null_count} 条记录（缺失率 {null_rate:.1%}），已自动剔除。")
+                st.markdown(
+                    f"""
+                    <div class="dqc-note">
+                        <b>提示</b>：债券文件「{file_label}」中「{col}」缺失 {null_count} 条记录（缺失率 {null_rate:.1%}），已自动剔除。
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
                 df = df.dropna(subset=[col])
             else:
                 # 超过 2%：硬拦截
                 null_rows = df[df[col].isna()].index[:5].tolist()
                 raise ValueError(
-                    f"数据质量提示： 债券文件「{file_label}」中「{col}」缺失率为 {null_rate:.1%}，"
+                    f"债券文件「{file_label}」中「{col}」缺失率为 {null_rate:.1%}，"
                     f"已超过 {BOND_CRITICAL_NULL_TOLERANCE:.0%} 的硬限制，请检查上面提到的文件。\n"
                     f"空值样本行号：{null_rows}"
                 )
@@ -285,7 +292,14 @@ def _dqc_bond(df: pd.DataFrame, source_file: Path) -> tuple[pd.DataFrame, list]:
                 )
             logger.warning(msg)
             dqc_report.append(msg)
-            st.warning(f"数据质量提醒：债券文件「{file_label}」字段「{col}」空值率达 {null_rate:.1%}，请确认导出是否完整。")
+            st.markdown(
+                f"""
+                <div class="dqc-note">
+                    <b>提示</b>：债券文件「{file_label}」字段「{col}」空值率达 {null_rate:.1%}，请确认导出是否完整。
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     return df, dqc_report
 
@@ -294,12 +308,13 @@ def _dqc_fiscal(df: pd.DataFrame, source_path: Path) -> None:
     """
     【DQC】财力数据质量防御检查。
     
-    财力文件结构简单，只做三项：
+    财力文件结构简单，做四项检查：
       1. Schema Check：必须有「城市」和「一般公共预算收入(亿元)」
       2. No-Null Check：「城市」、「一般公共预算收入(亿元)」不允许空值
-      「城市」是与债券数据 JOIN 的 key，「一般公共预算收入(亿元)」需要用来表示地方财力水平
-      3. Uniqueness Check (重复行检查，以防有两个同一城市行，后续在join函数发生数据膨胀)
-
+         「城市」是与债券数据 JOIN 的 key，「一般公共预算收入(亿元)」需要用来表示地方财力水平
+      3. Uniqueness Check：重复行检查，以防有两个同一城市行，后续在join时发生数据膨胀
+      4. City-name Check：城市名检查，拦截截断/异常城市名（如"眉"应为"眉山市"），合法城市名至少2个字符
+         Soft Warning：仅警告不阻断，parquet 照常生成，避免同省其他正常城市在 join 时丢失财力数据
     """
     file_label = source_path.name
 
@@ -343,6 +358,19 @@ def _dqc_fiscal(df: pd.DataFrame, source_path: Path) -> None:
             f"请在原始 Excel 中删除重复行，"
             f"确保每个城市只有一行唯一的财力数据。"
         )
+
+    # ── 层级 4：城市名长度检查（拦截截断/异常名称）──────────────────────
+    # 中国地级市名最短为2字（如"眉山""大理"），单字一定是截断或录入错误
+    # Soft Warning：仅警告，parquet 照常生成，避免同省正常城市在 join 时丢失财力数据
+    invalid_cities = [c for c in df["城市"].dropna().unique() if len(str(c).strip()) < 2]
+
+    if invalid_cities:
+        msg = (
+            f"[DQC · City-name Check] 财力文件「{file_label}」中存在异常城市名：\n"
+            f"  异常城市：{invalid_cities}\n"
+            f"  请检查原始 Excel 中城市名是否存在截断、错别字或多余空格。"
+        )
+        logger.warning(msg)
     
 
 # ──────────────────────────────────────────────

@@ -29,7 +29,7 @@ import logging
 class ColorWarningFormatter(logging.Formatter):
     def format(self, record):
         msg = super().format(record)
-        if record.levelno == logging.WARNING:
+        if record.levelno in (logging.WARNING, logging.ERROR):
             return f"\033[31m{msg}\033[0m"  # 红色
         return msg
 logging.getLogger().handlers.clear() #删掉之前的handler
@@ -222,6 +222,16 @@ html, body, [class*="css"] {
 div[data-baseweb="tab-border"]    { background-color: #d1e0de !important; }
 [data-testid="stAlert"] { padding: 0.4rem 1rem !important; }
 [data-testid="stAlert"] p { margin: 0 !important; }
+.dqc-note {
+    padding: 10px 6px;
+    background-color: #F5F2F0;
+    color: #607D8B;
+    line-height: 1.4;
+    border-left: 4px solid #607D8B;
+    border-radius: 4px;
+    font-size: 14px;
+    margin: 0 0 18px;
+}
 .sec-title { font-size: 18px; font-weight: 600; color: #1a3a3a; margin: 5px 0 5px; }
 .sec-note  { font-size: 15px; color: #6a8a88; margin-bottom: 8px; line-height: 1.5; }
 .rec-g { background: #f1f8f1; border-left: 4px solid #3d8c40; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; color: #1a3a3a; }
@@ -864,17 +874,37 @@ if needs_reload:
         if history_dqc:
             #status.write("#### 数据质量检查报告")
             for note in history_dqc:
-                st.warning(f"{note}")
+                st.markdown(
+                    f"""
+                    <div class="dqc-note">
+                        <b>提示</b>：{note}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
         else:
             status.write("")
 
         # ── Step 2：Staging — 省份财力数据 ──────────────────
         status.write("Step 2 / 4 · 读取省份财力数据（Staging）")
         _fiscal_path_pre = FISCAL_DIR / f"{FISCAL_YEAR}年{province_input}财力.xlsx"
-        stg_load_fiscal_data(
+        _fiscal_df = stg_load_fiscal_data(
             FISCAL_DIR, FISCAL_YEAR, province_input,
             _mtime=_file_mtime(_fiscal_path_pre),
         )
+
+        # ── 财力城市名 DQC 提示 ────────────────────────────
+        if not _fiscal_df.empty:
+            _invalid = [c for c in _fiscal_df["城市"].dropna().unique() if len(str(c).strip()) < 2]
+            if _invalid:
+                st.markdown(
+                    f"""
+                    <div class="dqc-note">
+                        <b>提示</b>：财力文件「{_fiscal_path_pre.name}」中存在异常城市名 {_invalid}，可能存在截断或录入错误，请检查该省原始财力数据。
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         # ── Step 3：Intermediate — 关联 债券数据和财力数据 ──────────
         status.write("Step 3 / 4 · 关联数据，构建大宽表（Intermediate）")
@@ -892,7 +922,14 @@ if needs_reload:
         )
 
         if warning_msg:
-            st.warning(warning_msg+"具体信息如下，请关注：")
+            st.markdown(
+                f"""
+                <div class="dqc-note">
+                    <b>提示</b>：{warning_msg}具体信息如下，请关注：
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         
             # 预处理展示用的 DataFrame
             display_df = (

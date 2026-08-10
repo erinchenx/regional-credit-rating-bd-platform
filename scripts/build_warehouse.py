@@ -87,13 +87,11 @@ from models.staging.stg_data import (
 # ──────────────────────────────────────────────
 
 class ColorWarningFormatter(logging.Formatter):
-    """自定义格式化器：将 WARNING 级别的日志染成红色"""
+    """自定义格式化器：将 WARNING 和 ERROR 级别的日志染成红色"""
     def format(self, record):
-        # 先获取标准格式的消息（时间 - 级别 - 内容）
         msg = super().format(record)
-        # 如果是警告级别，则包裹 ANSI 转义序列（红色高亮）
-        if record.levelno == logging.WARNING:
-            return f"\033[31m{msg}\033[0m"  # \033[31m 是红色开始，\033[0m 是重置颜色
+        if record.levelno in (logging.WARNING, logging.ERROR):
+            return f"\033[31m{msg}\033[0m"
         return msg
 
 def setup_logger():
@@ -163,10 +161,22 @@ def build_bond_parquet(bond_excel_path: Path) -> tuple[Path,list]:
     snapshot_date = date_match.group()
     parquet_path  = BOND_LAKE_DIR / f"bond_{snapshot_date}.parquet"
     
-    # 如果检测到目标快照Parquet已存在，则直接return拦截，中断后续再次读取excel、dqc、再次生成parquet等流程
+    # 如果检测到目标快照Parquet已存在，则跳过写入，但仍跑DQC以输出质量报告
     if parquet_path.exists():
-        logger.info(f"[Bond] {parquet_path.name}文件已存在，无需再次转换，跳过。")
-        return parquet_path, [] 
+        logger.info(f"[Bond] {parquet_path.name} 文件已存在，跳过写入，执行 DQC 检查...")
+        df_check = pd.read_excel(bond_excel_path, sheet_name=0)
+        df_check = _rename_bond_columns(df_check)
+        for col in ["主体评级机构", "债项评级机构"]:
+            if col in df_check.columns:
+                df_check[col] = df_check[col].apply(_normalize_agency_name)
+        df_check["行政级别量化"] = df_check["城投行政级别"].map(LEVEL_ORDER).fillna(0)
+        df_check["主体级别量化"] = df_check["主体评级"].map(RATING_ORDER).fillna(0)
+        try:
+            _, dqc_report = _dqc_bond(df_check, bond_excel_path)
+        except Exception as e:
+            logger.error(f"[Bond] DQC 检查失败：\n{e}")
+            dqc_report = []
+        return parquet_path, dqc_report
 
     logger.info(f"[Bond] 读取 Excel：{bond_excel_path.name}")
     df = pd.read_excel(bond_excel_path, sheet_name=0)
@@ -248,7 +258,20 @@ def build_fiscal_parquets(fiscal_dir: Path, fiscal_year: str) -> list[Path]:
         parquet_path = FISCAL_LAKE_DIR / f"{province}_{fiscal_year}.parquet"
 
         if parquet_path.exists():
-            logger.info(f"[Fiscal] 已存在，跳过：{parquet_path.name}")
+            # parquet 已存在，跳过写入，但仍跑 DQC 以输出质量警告
+            df_check = pd.read_excel(excel_path)
+            col_map_check: dict[str, str] = {}
+            for col in df_check.columns:
+                if "地区" in str(col) or "城市" in str(col):
+                    col_map_check[col] = "城市"
+                if "一般公共预算收入" in str(col):
+                    col_map_check[col] = "一般公共预算收入(亿元)"
+            df_check = df_check.rename(columns=col_map_check)
+            try:
+                _dqc_fiscal(df_check, excel_path)
+            except Exception as e:
+                logger.error(f"[Fiscal] DQC失败，请检查：{excel_path.name}\n  {e}")
+            logger.info(f"[Fiscal] 已存在，跳过写入：{parquet_path.name}")
             generated.append(parquet_path)
             continue
 

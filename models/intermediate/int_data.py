@@ -65,10 +65,13 @@ def _dqc_int_join(df_before: pd.DataFrame, df_after: pd.DataFrame, province: str
             f"未匹配城市：{missing_cities}"
         )
         logger.warning(msg)
-        st.warning(
-            f"数据质量提示：{province} 债券与财力关联率仅为 {match_rate:.1%}。\n"
-            f"未匹配成功的城市样本：{missing_cities}。"
-            f"请检查这些城市的名字是否与债券数据中一致，以及这些城市是否有财力数据"
+        st.markdown(
+            f"""
+            <div class="dqc-note">
+                <b>提示</b>：{province} 债券与财力关联率仅为 {match_rate:.1%}。未匹配成功的城市样本：{missing_cities}。请检查这些城市的名字是否与债券数据中一致，以及这些城市是否有财力数据。
+            </div>
+            """,
+            unsafe_allow_html=True
         )
     return df_after
 
