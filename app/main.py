@@ -377,9 +377,10 @@ def fig_pie(sc_pj: pd.DataFrame) -> go.Figure:
         textinfo="percent", textfont_size=13,
         hovertemplate="%{label}<br>主体数：%{value}<br>占比：%{percent}<extra></extra>",
     ))
+    fig.update_traces(rotation=70)  
     fig.update_layout(height=280, showlegend=True,
                       legend=dict(orientation="v", font=dict(size=13), x=1.02, y=0.5),
-                      margin=dict(t=10, b=10, l=10, r=100))
+                      margin=dict(t=10, b=30, l=10, r=100))
     return fig
 
 
