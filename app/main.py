@@ -795,16 +795,31 @@ def run_analysis(df_qg: pd.DataFrame, province: str) -> dict | None:
 # SIDEBAR
 # ══════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### ⚙️ 分析设置")
-    provs = _available_provinces()
-    province_input = st.selectbox("选择展业省份", provs, index=0) if provs else st.text_input("目标省份（精确名称）", value="四川省")
-    run_btn = st.button("▶开始分析", type="primary", use_container_width=True)
+
+    st.markdown("### :material/analytics: 分析设置")
+
+    with st.container(border=True):
+
+        col1, col2 = st.columns([1, 1.5], vertical_alignment="center")
+
+        with col1:
+            st.markdown(
+                "<div style='font-size: 14px; font-weight: 500; position: relative; top: -8px;'>选择省份</div>",
+                unsafe_allow_html=True
+            )
+
+        with col2:
+            provs = _available_provinces()
+            if provs:
+                province_input = st.selectbox("目标省份", provs, index=0, label_visibility="collapsed")
+            else:
+                province_input = st.text_input("目标省份（精确名称）", value="四川省", label_visibility="collapsed")
+    run_btn = st.button("开始分析", type="primary", use_container_width=True, icon=":material/play_arrow:")
     st.markdown("---")
     # ── 数据源模式指示 ────────────────────────────────────
     _using_duckdb = DB_PATH.exists() and bool(_active_snap)
-    _mode_icon    = "" if _using_duckdb else ""
     _mode_label   = "DuckDB 仓库模式" if _using_duckdb else "Excel 降级模式"
-    st.caption(f"{_mode_icon} 数据读取模式：{_mode_label}")
+    st.caption(f"数据读取模式：{_mode_label}")
     if _using_duckdb:
         st.caption(f"激活快照版本：`{_active_snap}`")
         _avail = _VERSION.get("bond_snapshots_available", [])
@@ -812,7 +827,7 @@ with st.sidebar:
             st.caption(f"可用快照：{', '.join(_avail)}")
     else:
         st.caption(f"债券数据：`{BOND_FILE.name}`")
-        st.caption("⚠️ 提示：运行 `python scripts/build_warehouse.py`")
+        st.caption(":material/warning: 提示：运行 `python scripts/build_warehouse.py`")
         st.caption("可切换至 DuckDB 高性能模式")
     st.caption(" ")
     st.caption("数据来源说明")
@@ -833,7 +848,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if not BOND_FILE.exists():
-    st.error(f"❌ 未找到债券数据文件：`{BOND_FILE}`")
+    st.error(f"未找到债券数据文件：`{BOND_FILE}`")
     st.stop()
 
 # ══════════════════════════════════════════════
@@ -921,7 +936,7 @@ if needs_reload:
         result = run_analysis(df_qg, province_input)
 
         if result is None:
-            status.update(label=f" 未找到「{province_input}」的发债数据", state="error")
+            status.update(label=f"未找到「{province_input}」的发债数据", state="error")
             st.error(f"提示：未找到省份「{province_input}」的发债数据，请确认名称与 Wind 数据一致。")
             st.stop()
 
@@ -1140,7 +1155,7 @@ with tabs[2]:
     st.markdown('<div class="sec-note">根据已发债的受评主体数据，模拟特定城市+行政级别+信用级别下的财务门槛；输入新主体数据、并点击评估后逐项与市场分位数对比。</div>', unsafe_allow_html=True)
     sim_c1, sim_c2 = st.columns([1, 1])
     with sim_c1:
-        st.markdown("**📍 定位目标市场**")
+        st.markdown(":material/location_on: **定位目标市场**")
         sim_city = st.selectbox("目标城市", ["全省（不限城市）"] + _cities_by_fiscal(sc_zt), key="sim_city")
         sim_lv   = st.selectbox("目标行政级别", ["全部行政级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="sim_lv")
         sim_rt   = st.selectbox("目标主体评级", ["全部主体级别"] + [r for r in RATING_ORDER if r in sc_zt["主体评级"].values], key="sim_rt")
@@ -1238,7 +1253,7 @@ with tabs[2]:
             if sim_rt   != "全部主体级别":     bench_df = bench_df[bench_df["主体评级"]==sim_rt]
             bench = mart_financial_bench(bench_df)
 
-        st.markdown(f"**📊 市场财务基准**（基于筛选后的 **{bench['n']}** 家已公开财报的主体样本）")
+        st.markdown(f":material/bar_chart: **市场财务基准**（基于筛选后的 **{bench['n']}** 家已公开财报的主体样本）")
         if bench["n"] > 0:
             fn = {"总资产": "总资产(亿元)", "净资产": "净资产(亿元)", "营业收入": "营业收入(亿元)", "净利润": "净利润(亿元)", "资产负债率": "资产负债率(%)"}
             br = [{"指标": lbl, "最小值": bench[col]["min"], "Q1(25%)": bench[col]["q1"], "中位数": bench[col]["median"], "均值": bench[col]["mean"], "Q3(75%)": bench[col]["q3"], "最大值": bench[col]["max"]} for col, lbl in fn.items() if col in bench and _has_bench(bench[col])]
@@ -1267,7 +1282,7 @@ with tabs[2]:
                 )
 
     with sim_c2:
-        st.markdown("**✏️ 输入待评估主体财务数据**")
+        st.markdown(":material/edit_note: **输入待评估主体财务数据**")
         inp_as  = st.number_input("总资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_as")
         inp_eq  = st.number_input("净资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_eq")
         inp_rv  = st.number_input("营业收入（亿元）", min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_rv")
@@ -1278,7 +1293,8 @@ with tabs[2]:
             st.session_state["inp_lev"] = auto_lev
         inp_lev = st.number_input("资产负债率（%）— 自动计算，可手动覆盖", min_value=0.0, max_value=100.0, step=0.1, format="%.1f", value=None, key="inp_lev")
 
-        eval_btn = st.button("▶ 开始评估财务指标", type="primary", use_container_width=True)
+        eval_btn = st.button("开始评估财务指标", type="primary", use_container_width=True,
+                             icon=":material/play_arrow:")
         if eval_btn and bench["n"] > 0:
             inp_vals = {"总资产": inp_as, "净资产": inp_eq, "营业收入": inp_rv, "净利润": inp_pf, "资产负债率": inp_lev}
             scored = [{"指标": col, "输入值": val, "市场中位": bench[col]["median"], "得分": _score_val(val, bench[col], col)} for col, val in inp_vals.items() if val is not None and col in bench and _has_bench(bench[col])]
@@ -1308,7 +1324,7 @@ with tabs[2]:
                 sm = {4: "★★★★", 3: "★★★", 2: "★★", 1: "★"}
                 cm = {4: "超75%分位，领先市场", 3: "超中位，中游靠前", 2: "超25%分位，中游靠后", 1: "低于25%分位，偏弱"}
                 res_rows = [{"指标": r["指标"], "输入值": f"{r['输入值']}{'%' if r['指标']=='资产负债率' else '亿'}", "市场中位": f"{r['市场中位']}{'%' if r['指标']=='资产负债率' else '亿'}", "竞争力": sm[r["得分"]], "评价": cm[r["得分"]]} for r in scored]
-                st.markdown("**📋 财务指标评估结果**")
+                st.markdown(":material/fact_check: **财务指标评估结果**")
                 st.dataframe(pd.DataFrame(res_rows), use_container_width=True, hide_index=True)
 
 # ────────────────────────────────────────────
@@ -1371,7 +1387,7 @@ with tabs[3]:
         st.info("当前筛选条件下无主承销商数据。")
 
     st.markdown("---")
-    st.markdown("**💡 同业交流建议**")
+    st.markdown(":material/lightbulb: **同业交流建议**")
     if not partner_df.empty and "合作等级" in partner_df.columns:
         high = partner_df[partner_df["合作等级"]=="主要合作伙伴"]
         mid  = partner_df[partner_df["合作等级"]=="初步合作对象"]
@@ -1434,6 +1450,7 @@ with tabs[4]:
                                  case_rt   if case_rt!="全部信用级别" else ""] if p]
     _dl1, _dl2 = st.columns([4, 1])
     with _dl1: st.caption(f"点击右侧按钮下载当前筛选结果（{len(case_df)} 条记录），输出为 HTML 格式，可直接用浏览器打开或打印。")
-    with _dl2: st.download_button("⬇️ 导出 HTML 报告", data=_html_bytes,
+    with _dl2: st.download_button("导出 HTML 报告", data=_html_bytes,
                                    file_name="_".join(_fname_parts)+"_发债案例.html",
-                                   mime="text/html; charset=utf-8", use_container_width=True)
+                                   mime="text/html; charset=utf-8", use_container_width=True,
+                                   icon=":material/download:")
