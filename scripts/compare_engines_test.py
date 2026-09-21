@@ -444,7 +444,10 @@ def compare_tab2(pdata: dict, province: str) -> bool:
 
     dq_all = qdb("""
         SELECT
-            COUNT(*)                              AS 样本数,
+            -- 与 mart_financial_bench().n 同口径：只算至少有一项财务指标非空的主体
+            COALESCE(SUM(CASE WHEN 总资产 IS NOT NULL OR 净资产 IS NOT NULL
+                               OR 营业收入 IS NOT NULL OR 净利润 IS NOT NULL
+                               OR 资产负债率 IS NOT NULL THEN 1 ELSE 0 END), 0) AS 样本数,
             ROUND(MEDIAN(总资产),     2)          AS 总资产_中位,
             ROUND(MEDIAN(净资产),     2)          AS 净资产_中位,
             ROUND(MEDIAN(营业收入),   2)          AS 营业收入_中位,

@@ -335,15 +335,24 @@ def mart_financial_bench(df_issuer_view: pd.DataFrame) -> dict:
 
     输入：去重主体视图（来自 intermediate 层）
     输出：{
-        "n": 主体数,
+        "n": 有财务数据的样本数,
         "总资产":  {"min","max","mean","median","q1","q3"},
         "净资产":  {...},
         "营业收入": {...},
         "净利润":  {...},
         "资产负债率": {...},
     }
+
+    注意：n 统计的是「至少有一项财务指标非空」的主体数，而非受评主体总数。
+    因为分位数只能由有财务数据的样本算出，若把无财务数据的主体也计入 n，
+    界面显示的门槛样本数会虚高（实测全省 208 家受评主体中 112 家五项财务全空），
+    且会让「样本数>0 但分位数全空」的组合漏过下游的 n>0 判定。
+    与 v_financial_bench.样本数 的口径保持一致。
     """
-    result: dict = {"n": len(df_issuer_view)}
+    _fin_cols = [c for c in ["总资产", "净资产", "营业收入", "净利润", "资产负债率"]
+                 if c in df_issuer_view.columns]
+    n_fin = int(df_issuer_view[_fin_cols].notna().any(axis=1).sum()) if _fin_cols else 0
+    result: dict = {"n": n_fin}
     for col in ["总资产", "净资产", "营业收入", "净利润", "资产负债率"]:
         if col not in df_issuer_view.columns:
             continue

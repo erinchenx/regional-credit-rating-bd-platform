@@ -33,7 +33,7 @@
 
 - **数据源**：Wind 城投债全量导出 + 财汇/Wind数据库地方财力数据
 - **交付物 1**：Streamlit 看板，供业务人员、分析师、管理层日常使用
-- **交付物 2**：`credit_indicators.duckdb` 文件，客户可直接用 Tableau / Power BI 等连接做自定义分析
+- **交付物 2**：`credit_indicators.duckdb` 文件，**支持**直接连接 Tableau、Power BI 等工具**进行**自定义分析
 
 > 交付细节见[交付方案说明](#交付方案说明)
 
@@ -50,7 +50,6 @@
 ![评级机构全景](screenshots/0.png)
 ![评级机构全景](screenshots/1.png)
 ![评级机构全景](screenshots/2.png)
-
 
 <details>
 <summary>点击展开查看所有 Tab 截图</summary>
@@ -158,14 +157,14 @@
 │
 ├── data/
 │   ├── raw/                     # 【原始层】债券 Excel 及 各省财力 Excel
-│   │   ├── bond/     
+│   │   ├── bond/
 │   │   │    └── 全国城投债数据_WIND截止20230216.xlsx
-│   │   └── fiscal/  
-│   │        ├── 2021年四川省财力.xlsx  
+│   │   └── fiscal/
+│   │        ├── 2021年四川省财力.xlsx
 │   │        └── ...（共 13 省）
-│   │  
+│   │
 │   ├── warehouse/               # 【标准层】Parquet 数据湖
-│   │   ├── bond/    
+│   │   ├── bond/
 │   │   │   └── bond_20230216.parquet   #  由 build_warehouse.py 运行后生成
 │   │   └── fiscal/
 │   │       ├── 四川省_2021.parquet      #  由 build_warehouse.py 运行后生成
@@ -283,7 +282,7 @@ python scripts/build_warehouse.py --bond-file "全国城投债数据_WIND截止2
 python scripts/build_warehouse.py --activate 20230216
 ```
 
-不重新处理 Excel，只更新 DuckDB 视图指向和 `active_version.json`，秒级生效。`v_bond` 视图立即指向对应 Parquet，Streamlit 缓存自动失效，刷新页面即可看到历史数据。
+不重新处理 Excel，只更新 DuckDB 视图指向和 `active_version.json`，秒级生效。`v_bond` 视图立即指向对应 Parquet，Streamlit 缓存自动失效，刷新页面即可看到指定版本的分析数据。
 
 ### 版本管理
 
@@ -416,17 +415,17 @@ else:
 
 ### 各 Tab 双引擎对照
 
-| Tab             | 功能模块            | DuckDB 主引擎                           | pandas 降级路径                  | 备注                                 |
-| --------------- | ------------------- | --------------------------------------- | -------------------------------- | ------------------------------------ |
-| **全局**  | 省份 KPI            | `v_province_kpi`                      | `len(sc_zt)` + `df_sc.sum()` |                                      |
-| **Tab 0** | 评级机构排名表      | `v_agency_market_share`               | `mart_agency_stats()`          |                                      |
-| **Tab 0** | 饼图 / 柱状图       | 从`v_agency_market_share` 派生        | 从排名表派生                     |                                      |
-| **Tab 0** | 竞争热力矩阵（4维） | `—`（仅取机构名单）                  | `mart_competition_matrix()`    | 四维动态透视始终由 pandas 计算，DuckDB 仅提供数据源（含机构名单） |
-| **Tab 1** | 主体地图 / 名单表   | `v_issuer_profile`                    | `int_build_issuer_view()`      |                                      |
-| **Tab 2** | 准入门槛分位数      | `int_v_issuer_enriched`（内联聚合）   | `mart_financial_bench()`       | 对等视图 `v_financial_bench` 存在，当前 app 未直接引用（供 BI / 测试） |
-| **Tab 3** | 主承销商排名        | `v_underwriter_stats`                 | `mart_underwriter_stats()`     | 已计算（sc_uw），暂未接入 Tab 展示 |
-| **Tab 3** | 展业帮手圈          | `v_partner_network` JOIN 省份城市集合 | `mart_partner_network()`       |                                      |
-| **Tab 4** | 发债案例明细        | `v_bond` WHERE 省份+机构+城市         | 筛选`df_sc`                    |                                      |
+| Tab             | 功能模块            | DuckDB 主引擎                           | pandas 降级路径                  | 备注                                                                    |
+| --------------- | ------------------- | --------------------------------------- | -------------------------------- | ----------------------------------------------------------------------- |
+| **全局**  | 省份 KPI            | `v_province_kpi`                      | `len(sc_zt)` + `df_sc.sum()` |                                                                         |
+| **Tab 0** | 评级机构排名表      | `v_agency_market_share`               | `mart_agency_stats()`          |                                                                         |
+| **Tab 0** | 饼图 / 柱状图       | 从`v_agency_market_share` 派生        | 从排名表派生                     |                                                                         |
+| **Tab 0** | 竞争热力矩阵（4维） | `—`（仅取机构名单）                  | `mart_competition_matrix()`    | 四维动态透视始终由 pandas 计算，DuckDB 仅提供数据源（含机构名单）       |
+| **Tab 1** | 主体地图 / 名单表   | `v_issuer_profile`                    | `int_build_issuer_view()`      |                                                                         |
+| **Tab 2** | 准入门槛分位数      | `int_v_issuer_enriched`（内联聚合）   | `mart_financial_bench()`       | 对等视图`v_financial_bench` 存在，当前 app 未直接引用（供 BI / 测试） |
+| **Tab 3** | 主承销商排名        | `v_underwriter_stats`                 | `mart_underwriter_stats()`     | 已计算（sc_uw），暂未接入 Tab 展示                                      |
+| **Tab 3** | 展业帮手圈          | `v_partner_network` JOIN 省份城市集合 | `mart_partner_network()`       |                                                                         |
+| **Tab 4** | 发债案例明细        | `v_bond` WHERE 省份+机构+城市         | 筛选`df_sc`                    |                                                                         |
 
 > **说明**：（1）`mart_competition_matrix()` 的四维动态透视（城市 / 行政级别 / 评级 / 财力段）需要在运行时确定列结构，不适合固化为静态 SQL 视图，因此该模块始终使用 pandas 计算，DuckDB 仅提供原始数据。（2）准入门槛模拟器需要"任意维度通配 + 实时聚合"，而分位数不可加总。`v_financial_bench` = 给 BI 的"固定组合点查"预聚合宽表；`int_v_issuer_enriched` 内联聚合 = 给模拟器的"任意组合（含通配）实时算"。两者粒度、用途不同。
 

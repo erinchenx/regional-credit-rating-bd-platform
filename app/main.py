@@ -365,6 +365,15 @@ def _score_val(val: float, bench: dict, col: str) -> int:
     return 3 if val >= bench["q3"] else (2 if val >= bench["median"] else (1 if val >= bench["q1"] else 0))
 
 
+def _has_bench(bench: dict) -> bool:
+    """该指标是否有可用基准——q1/中位/q3 三者齐全才能比较。
+
+    样本组合里该指标全为空时（分位数为 NULL）没有基准可言，必须整条跳过，
+    否则 _score_val 会拿 None 去比、或拿 NaN 比出恒 False，静默给出 0 分。
+    """
+    return all(bench.get(k) is not None for k in ("q1", "median", "q3"))
+
+
 # ──────────────────────────────────────────────
 # 图表渲染函数（UI 层）
 # ──────────────────────────────────────────────
@@ -1128,7 +1137,7 @@ with tabs[1]:
 # TAB 2  准入门槛模拟器
 # ────────────────────────────────────────────
 with tabs[2]:
-    st.markdown('<div class="sec-note">根据已发债的受评主体数据，模拟特定城市+行政级别+信用级别下的财务门槛；输入新主体数据后自动打分并给出承做建议。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-note">根据已发债的受评主体数据，模拟特定城市+行政级别+信用级别下的财务门槛；输入新主体数据、并点击评估后逐项与市场分位数对比。</div>', unsafe_allow_html=True)
     sim_c1, sim_c2 = st.columns([1, 1])
     with sim_c1:
         st.markdown("**📍 定位目标市场**")
@@ -1155,7 +1164,11 @@ with tabs[2]:
             _and_clause = (" AND " + " AND ".join(_and_parts)) if _and_parts else ""
             _bench_sql = f"""
                 SELECT
-                    COUNT(*) AS 样本数,
+                    -- 样本数 = 至少有一项财务指标非空的主体数（无财务数据的主体不构成分位数，不计入）
+                    -- COALESCE：无匹配行时 SUM 返回 NULL，而 COUNT(*) 返回 0，需补齐语义差异
+                    COALESCE(SUM(CASE WHEN 总资产 IS NOT NULL OR 净资产 IS NOT NULL
+                                       OR 营业收入 IS NOT NULL OR 净利润 IS NOT NULL
+                                       OR 资产负债率 IS NOT NULL THEN 1 ELSE 0 END), 0) AS 样本数,
                     ROUND(MIN(总资产), 2) AS 总资产_最小,
                     ROUND(QUANTILE_CONT(总资产, 0.25), 2) AS 总资产_Q1,
                     ROUND(MEDIAN(总资产), 2) AS 总资产_中位,
@@ -1204,32 +1217,36 @@ with tabs[2]:
             }
             if bench["n"] > 0 and not _bench_df.empty:
                 row = _bench_df.iloc[0]
+                # 注意：SQL NULL 经 query_duckdb 取回后是 pandas 的 NaN，`is not None` 拦不住它。
+                # 全空指标的 QUANTILE_CONT/MEDIAN 返回 NULL → NaN，必须用 pd.notna 判定，
+                # 否则 NaN 会被当成有效基准传到 _score_val，使 `val >= nan` 恒为 False
+                # （任何输入都判 0 分且不报错）。
                 for metric, (mn, q1, med, avg, q3, mx) in _col_map.items():
                     bench[metric] = {
-                        "min":    float(row[mn])  if row[mn]  is not None else None,
-                        "q1":     float(row[q1])  if row[q1]  is not None else None,
-                        "median": float(row[med]) if row[med] is not None else None,
-                        "mean":   float(row[avg]) if row[avg] is not None else None,
-                        "q3":     float(row[q3])  if row[q3]  is not None else None,
-                        "max":    float(row[mx])  if row[mx]  is not None else None,
+                        "min":    float(row[mn])  if pd.notna(row[mn])  else None,
+                        "q1":     float(row[q1])  if pd.notna(row[q1])  else None,
+                        "median": float(row[med]) if pd.notna(row[med]) else None,
+                        "mean":   float(row[avg]) if pd.notna(row[avg]) else None,
+                        "q3":     float(row[q3])  if pd.notna(row[q3])  else None,
+                        "max":    float(row[mx])  if pd.notna(row[mx])  else None,
                     }
         else:
             # pandas 降级路径（DuckDB 未初始化时）
             bench_df = sc_zt.copy()
             if sim_city != "全省（不限城市）": bench_df = bench_df[bench_df["城市"]==sim_city]
             if sim_lv   != "全部行政级别":     bench_df = bench_df[bench_df["城投行政级别"]==sim_lv]
-            if sim_rt   != "全部信用级别":     bench_df = bench_df[bench_df["主体评级"]==sim_rt]
+            if sim_rt   != "全部主体级别":     bench_df = bench_df[bench_df["主体评级"]==sim_rt]
             bench = mart_financial_bench(bench_df)
 
-        st.markdown(f"**📊 市场财务基准**（基于 **{bench['n']}** 家受评主体）")
+        st.markdown(f"**📊 市场财务基准**（基于筛选后的 **{bench['n']}** 家已公开财报的主体样本）")
         if bench["n"] > 0:
             fn = {"总资产": "总资产(亿元)", "净资产": "净资产(亿元)", "营业收入": "营业收入(亿元)", "净利润": "净利润(亿元)", "资产负债率": "资产负债率(%)"}
-            br = [{"指标": lbl, "最小值": bench[col]["min"], "Q1(25%)": bench[col]["q1"], "中位数": bench[col]["median"], "均值": bench[col]["mean"], "Q3(75%)": bench[col]["q3"], "最大值": bench[col]["max"]} for col, lbl in fn.items() if col in bench]
+            br = [{"指标": lbl, "最小值": bench[col]["min"], "Q1(25%)": bench[col]["q1"], "中位数": bench[col]["median"], "均值": bench[col]["mean"], "Q3(75%)": bench[col]["q3"], "最大值": bench[col]["max"]} for col, lbl in fn.items() if col in bench and _has_bench(bench[col])]
             if br:
                 bt = pd.DataFrame(br)
                 st.dataframe(bt, use_container_width=True, hide_index=True,
                              column_config={c: st.column_config.NumberColumn(format="%.1f") for c in bt.columns if c != "指标"})
-                st.caption("★★★ >Q3(75%) | ★★ >中位 | ★ >Q1(25%) | ✗ <Q1")
+                st.caption("★★★★ >Q3(75%) | ★★★ >中位 | ★★ >Q1(25%) | ★ <Q1")
         else:
             st.markdown(
                     """
@@ -1243,7 +1260,7 @@ with tabs[2]:
                         font-size: 14px;
                         margin: 10px 0;
                     ">
-                        <b>提示</b>：当前筛选组合暂无历史数据，请调整条件。
+                        <b>提示</b>：当前筛选组合暂无财务数据可作基准（或该组合无受评主体），请调整条件。
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -1255,18 +1272,23 @@ with tabs[2]:
         inp_eq  = st.number_input("净资产（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_eq")
         inp_rv  = st.number_input("营业收入（亿元）", min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_rv")
         inp_pf  = st.number_input("净利润（亿元）",   min_value=0.0, step=0.1, format="%.1f", value=None, key="inp_pf")
-        auto_lev = round((inp_as - inp_eq) / inp_as * 100, 1) if (inp_as and inp_as > 0 and inp_eq is not None) else None
+        # 用 `is not None` 判空，不用真值判断：输入 0 是实际值，不是"未填写"
+        auto_lev = round((inp_as - inp_eq) / inp_as * 100, 1) if (inp_as is not None and inp_as > 0 and inp_eq is not None) else None
         if auto_lev is not None:
             st.session_state["inp_lev"] = auto_lev
         inp_lev = st.number_input("资产负债率（%）— 自动计算，可手动覆盖", min_value=0.0, max_value=100.0, step=0.1, format="%.1f", value=None, key="inp_lev")
 
         eval_btn = st.button("▶ 开始评估财务指标", type="primary", use_container_width=True)
         if eval_btn and bench["n"] > 0:
-            inp_vals = {"总资产": inp_as or None, "净资产": inp_eq or None, "营业收入": inp_rv or None, "净利润": inp_pf or None, "资产负债率": inp_lev or None}
-            scored = [{"指标": col, "输入值": val, "市场中位": bench[col]["median"], "得分": _score_val(val, bench[col], col)} for col, val in inp_vals.items() if val and col in bench]
+            inp_vals = {"总资产": inp_as, "净资产": inp_eq, "营业收入": inp_rv, "净利润": inp_pf, "资产负债率": inp_lev}
+            scored = [{"指标": col, "输入值": val, "市场中位": bench[col]["median"], "得分": _score_val(val, bench[col], col)} for col, val in inp_vals.items() if val is not None and col in bench and _has_bench(bench[col])]
             if not scored:
+                # 区分「没填数据」与「填了但该组合无对应基准」——修改之前会对后者静默判 0 分
+                # 一律用 `is None` 判断「未填写」：输入 0 是有意义的实际值，不能当成没填
+                _tip = ("请填写财务指标后再发起评估。" if all(v is None for v in inp_vals.values())
+                        else "所选筛选组合暂无对应指标的财务基准，请调整左侧条件后重试。")
                 st.markdown(
-                    """
+                    f"""
                     <div style="
                         padding: 10px 6px;
                         background-color: #F5F2F0;
@@ -1277,24 +1299,17 @@ with tabs[2]:
                         font-size: 14px;
                         margin: 10px 0;
                     ">
-                        <b>提示</b>：请填写财务指标后再发起评估。
+                        <b>提示</b>：{_tip}
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
             else:
-                ratio = sum(r["得分"] for r in scored) / (len(scored) * 3)
-                sm = {3: "★★★", 2: "★★", 1: "★", 0: "✗"}
-                cm = {3: "超75%分位，领先市场", 2: "超中位，稳健", 1: "超25%分位，偏弱", 0: "低于Q1，差距较大"}
+                sm = {4: "★★★★", 3: "★★★", 2: "★★", 1: "★"}
+                cm = {4: "超75%分位，领先市场", 3: "超中位，中游靠前", 2: "超25%分位，中游靠后", 1: "低于25%分位，偏弱"}
                 res_rows = [{"指标": r["指标"], "输入值": f"{r['输入值']}{'%' if r['指标']=='资产负债率' else '亿'}", "市场中位": f"{r['市场中位']}{'%' if r['指标']=='资产负债率' else '亿'}", "竞争力": sm[r["得分"]], "评价": cm[r["得分"]]} for r in scored]
                 st.markdown("**📋 财务指标评估结果**")
                 st.dataframe(pd.DataFrame(res_rows), use_container_width=True, hide_index=True)
-                st.progress(ratio)
-                score_pct = int(ratio * 100)
-                lbl = f"{sim_city if sim_city!='全省（不限城市）' else '全省'} · {sim_lv if sim_lv!='全部行政级别' else '全级别'} · {sim_rt if sim_rt!='全部信用级别' else '全信用级别'}"
-                if ratio >= 0.65:   st.markdown(f'<div class="rec-g"><b>✅ 建议承做（{score_pct}分）</b><br>主体财务优于{lbl}历史主体中位，竞争力较强。</div>', unsafe_allow_html=True)
-                elif ratio >= 0.35: st.markdown(f'<div class="rec-a"><b>⚠️ 谨慎评估（{score_pct}分）</b><br>部分指标低于{lbl}中位水平，建议重点评估薄弱项后决策。</div>', unsafe_allow_html=True)
-                else:               st.markdown(f'<div class="rec-r"><b>❌ 暂不建议（{score_pct}分）</b><br>主要指标明显偏弱，与{lbl}准入门槛差距较大。</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────
 # TAB 3  展业帮手圈

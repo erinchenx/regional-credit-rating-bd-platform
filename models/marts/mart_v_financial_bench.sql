@@ -5,6 +5,11 @@
 
 -- 包含字段：
 --  省份 | 城市 | 城投行政级别 | 主体评级 | 样本数 | 总资产_最小 | 总资产_Q1 |
+--
+-- 口径说明：样本数 = 「至少有一项财务指标非空」的主体数，不是该组合的受评主体总数。
+-- v_financial_bench 是 mart_financial_bench() 的对等视图（供 BI / 测试），
+-- 两者 n 的口径必须一致，否则 scripts/compare_engines_test.py 的 Tab 2 对照会失配。
+
 --  总资产_中位 | 总资产_均值 | 总资产_Q3 | 总资产_最大 | 净资产_最小 | 
 --  净资产_Q1 | 净资产_中位 | 净资产_均值 | 净资产_Q3 | 净资产_最大 | 
 --  营业收入_最小 | 营业收入_Q1 | 营业收入_中位 | 营业收入_均值 | 营业收入_Q3 | 营业收入_最大 | 
@@ -21,7 +26,9 @@ SELECT
     COALESCE(NULLIF(TRIM(城市), ''), '未知城市') AS 城市,
     COALESCE(NULLIF(TRIM(城投行政级别), ''), '未知级别') AS 城投行政级别,
     COALESCE(NULLIF(TRIM(主体评级), ''), '未知评级') AS 主体评级,
-    COUNT(*) AS 样本数,
+    SUM(CASE WHEN 总资产 IS NOT NULL OR 净资产 IS NOT NULL
+              OR 营业收入 IS NOT NULL OR 净利润 IS NOT NULL
+              OR 资产负债率 IS NOT NULL THEN 1 ELSE 0 END) AS 样本数,
     ROUND(MIN(总资产), 2) AS 总资产_最小,
     ROUND(QUANTILE_CONT(总资产, 0.25), 2) AS 总资产_Q1,
     ROUND(MEDIAN(总资产), 2) AS 总资产_中位,
