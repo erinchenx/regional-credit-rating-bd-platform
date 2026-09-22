@@ -868,10 +868,14 @@ if not BOND_FILE.exists():
 # 缓存全部命中时：status 容器以"完成"态折叠，用户几乎感知不到延迟。
 # 冷启动或 Excel 替换后：每一层的实际耗时都有对应文案，体验清晰。
 
+# 只有两种情况才重算：
+#   1) 用户点击了「开始分析」；
+#   2) 首次进入页面（session_state 里还没有任何结果），自动装载默认省份。
+#
+# 由右侧顶部「待开始分析」提示条交代两侧不一致。
 needs_reload = (
     run_btn
     or "result" not in st.session_state
-    or st.session_state.get("last_prov") != province_input
 )
 
 # 确保读vesion的dqc的最新信息能被感知（加入时间戳作为参数）
@@ -987,8 +991,9 @@ if needs_reload:
             expanded=False,
         )
 
-    st.session_state["result"]    = result
-    st.session_state["last_prov"] = province_input
+    st.session_state["result"] = result
+    # 注：曾用 session_state["last_prov"] 记录「上次分析的省份」并据此在切换时自动重算，
+    # 现改为只有点击按钮才重算，当前省份直接取 res["province"]，该键不再需要。
 
 
 
@@ -1004,6 +1009,20 @@ sc_zt      = res["sc_zt"]  #去重的发行人主体视图（DataFrame）一行�
 sc_pj      = res["agencies"] #评级机构市占率统计表（DataFrame），一行一家评级机构在某省的数据。Tab 0 的排行榜、饼图、柱图用。
 sc_uw      = res["underwriters"] #主承销商排名表（DataFrame），一行一家承销商。目前没有 Tab 直接用到它，但作为分析结果的一部分保留。如果后面加承销商排名的 Tab 可以立刻用上。
 actual_ags = res["actual_ags"] #该省内实际展业的评级机构名单（list）。Tab 0 热力矩阵的"我方机构"下拉框、Tab 3 展业帮手圈的机构选择器、Tab 4 发债案例的机构选择器，都需要知道该省有哪些机构可以选。
+
+# ────────────────────────────────────────────
+# 「待开始分析」提示条：侧边栏省份与右侧已加载的省份不一致
+# ────────────────────────────────────────────
+# 切换下拉框不会自动重算，此时左侧是新选省份、右侧仍是上一次分析结果，
+# 两者对不上，必须显式告知，否则用户会误读成"这就是新省份的数据"。
+if province_input != prov_name:
+    st.markdown(
+        f'''<div class="sec-note" style="border-left:4px solid #B8860B;padding:12px;background:#FDF6E3;border-radius:5px;line-height:1.6;">
+        <strong>待开始分析：</strong>侧边栏已选择「{province_input}」，下方展示的仍是上次分析结果「{prov_name}」。<br>
+        点击侧边栏的「开始分析」按钮，加载「{province_input}」的数据。
+    </div>''',
+        unsafe_allow_html=True,
+    )
 
 # ══════════════════════════════════════════════
 # KPI 行
