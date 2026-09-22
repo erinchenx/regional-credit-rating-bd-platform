@@ -171,8 +171,6 @@ html, body, [class*="css"] {
     font-weight: 600 !important;   /* 稍微加粗提高可读性 */
 }
 
-
-[data-testid="column"]  { display: flex !important; justify-content: center !important; flex: 1 !important; width: 100% !important; }
 [data-testid="stMetric"] { width: 100% !important; display: flex !important; justify-content: center !important; }
 [data-testid="metric-container"] { width: 90% !important; text-align: center !important; margin: 0 auto !important; }
 [data-testid="stMetricLabel"], [data-testid="stMetricValue"] { width: 100% !important; display: flex !important; justify-content: center !important; }
@@ -245,9 +243,12 @@ div.stButton > button:hover       { background-color: #E0E6E5; border: none; }
 div[data-baseweb="select"] > div:focus-within, input:focus, textarea:focus {
     border-color: #2d5a5e !important; box-shadow: 0 0 0 1px #2d5a5e !important;
 }
-[data-baseweb="radio"] input:checked ~ div { border-color: #1a3a3a !important; background-color: #1a3a3a !important; }
-div[data-baseweb="slider"] > div > div { background-color: #2d5a5e !important; }
-</style>
+
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div {
+    align-items: center !important;
+}
+
 """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
@@ -818,10 +819,18 @@ with st.sidebar:
     st.markdown("---")
     # ── 数据源模式指示 ────────────────────────────────────
     _using_duckdb = DB_PATH.exists() and bool(_active_snap)
-    _mode_label   = "DuckDB 仓库模式" if _using_duckdb else "Excel 降级模式"
-    st.caption(f"数据读取模式：{_mode_label}")
+    _mode_label   = "DuckDB仓库模式" if _using_duckdb else "Excel降级模式"
+
+    st.caption(
+        f'数据读取模式：<code style="font-size: 12px;">{_mode_label}</code>',
+        unsafe_allow_html=True,
+    )   
     if _using_duckdb:
-        st.caption(f"激活快照版本：`{_active_snap}`")
+
+        st.caption(
+            f'激活快照版本：<code style="font-size: 12px;">{_active_snap}</code>',
+            unsafe_allow_html=True,
+        )
         _avail = _VERSION.get("bond_snapshots_available", [])
         if len(_avail) > 1:
             st.caption(f"可用快照：{', '.join(_avail)}")
@@ -831,8 +840,14 @@ with st.sidebar:
         st.caption("可切换至 DuckDB 高性能模式")
     st.caption(" ")
     st.caption("数据来源说明")
-    st.caption(f"债券市场数据来源：`WIND 截止 {BOND_DATA_DUE}`")
-    st.caption(f"地方财力数据来源：`财汇数据库 {FISCAL_YEAR}年度数据`")
+    st.caption(
+        f'债券市场数据来源：<code style="font-size: 12px;">WIND·截止{BOND_DATA_DUE}</code>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f'地方财力数据来源：<code style="font-size: 12px;">财汇数据库·{FISCAL_YEAR}年度数据</code>',
+        unsafe_allow_html=True,
+    )
 
 # ══════════════════════════════════════════════
 # 顶部横幅
