@@ -15,7 +15,7 @@ dependencies = [
     "duckdb",                       # 嵌入式 OLAP 引擎，SQL 视图主引擎
     "pyarrow",                      # Parquet 读写，列式存储支撑层
     "scikit-learn",                 # 机器学习（如有聚类分析模块）
-    "xlsxwriter",                   # Excel 导出（报告下载功能）
+    "xlsxwriter",                   # HTML 导出（报告下载功能）
 ]
 
 [tool.setuptools.packages.find]

@@ -16,6 +16,7 @@ models/staging/stg_data.py
 """
 
 import json
+import re
 import warnings
 import duckdb
 import numpy as np
@@ -103,7 +104,24 @@ RATING_ORDER: dict[str, int] = {
     "BBB+": 2, "BBB": 1, "BBB-": 0,
 }
 
+# 财务指标的 [报告期] 会随数据期次变化，按已知口径逐项登记。
+# 报告期决定数据口径（全年 ≠ 三季），因此不参与宽松匹配，必须精确命中。
+# 顺序即精确匹配优先级（同一字段多个期次列并存时取靠前的）。
+_FIN_PERIODS = (
+    "去年全年", "去年三季", "去年两季", "去年一季",
+    "本年一季", "本年两季", "本年三季",
+)
+
+
+def _fin_variants(label: str, suffix: str) -> list[str]:
+    """展开财务指标列名在各报告期下的写法，如「资产总计\\n[报告期] 去年全年\\n…」。"""
+    return [f"{label}\n[报告期] {p}\n{suffix}" for p in _FIN_PERIODS]
+
+
 # Bond Excel 字段：标准列名 → 可能出现的原始列名（按优先级排列）
+# 注意：财务指标列名里的 [报告期] 随期次变化，已在上方逐项登记；
+#      而 [日期] / [交易日期]（截止日、最新收盘日等）随导出时间变化，
+#      由宽松匹配兜住。
 BOND_COLS: dict[str, list[str]] = {
     "证券代码":         ["证券代码"],
     "证券简称":         ["证券简称"],
@@ -132,11 +150,11 @@ BOND_COLS: dict[str, list[str]] = {
         "债项评级机构\n[交易日期] 最新收盘日\n[评级机构] 国内评级机构(除中债资信)",
         "债项评级机构",
     ],
-    "总资产":         ["资产总计\n[报告期] 去年三季\n[报表类型] 合并报表\n[单位] 亿元", "总资产 亿元"],
-    "净资产":         ["所有者权益合计\n[报告期] 去年三季\n[报表类型] 合并报表\n[单位] 亿元", "所有者权益 亿元"],
-    "营业收入":       ["营业收入\n[报告期] 去年三季\n[报表类型] 合并报表\n[单位] 亿元", "营业收入 亿元"],
-    "净利润":         ["净利润\n[报告期] 去年三季\n[报表类型] 合并报表\n[单位] 亿元", "净利润 亿元"],
-    "资产负债率":     ["资产负债率\n[报告期] 去年三季\n[单位] %", "资产负债率 %"],
+    "总资产":         _fin_variants("资产总计", "[报表类型] 合并报表\n[单位] 亿元") + ["总资产 亿元"],
+    "净资产":         _fin_variants("所有者权益合计", "[报表类型] 合并报表\n[单位] 亿元") + ["所有者权益 亿元"],
+    "营业收入":       _fin_variants("营业收入", "[报表类型] 合并报表\n[单位] 亿元") + ["营业收入 亿元"],
+    "净利润":         _fin_variants("净利润", "[报表类型] 合并报表\n[单位] 亿元") + ["净利润 亿元"],
+    "资产负债率":     _fin_variants("资产负债率", "[单位] %") + ["资产负债率 %"],
     "财务报告期":     ["最新报告期\n[交易日期] 最新收盘日", "财务最新报告期"],
     "实际控制人":     ["实际控制人名称\n[日期] 2022-12-31", "实际控制人"],
 }
@@ -155,17 +173,43 @@ def _normalize_agency_name(value) -> str:
     return AGENCY_NORMALIZE.get(value, value)
 
 
+def _canonical_col_name(name) -> str:
+    """
+    生成用于宽松匹配的列名指纹：剔除 [日期] / [交易日期] 限定段，其余原样保留。
+
+    例：'实际控制人名称\\n[日期] 2022-12-31' → '实际控制人名称'
+        '主体评级\\n[交易日期] 2022-12-31\\n…' → '主体评级\\n…'
+    这样导出截止日变化时仍能匹配；[报告期] 刻意不剔除——它决定数据口径，
+    「去年全年」和「去年三季」是不同的数据，必须精确命中。
+    """
+    text = re.sub(r"\[(?:交易)?日期\]\s*[^\[\n]*", "", str(name))
+    return "\n".join(p.strip() for p in text.split("\n") if p.strip())
+
+
 def _rename_bond_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     将债券 DataFrame 的原始列名映射到标准列名。
-    找不到对应列的标准字段会被补充为 NaN 列。
+
+    匹配策略：
+      ① 精确匹配：BOND_COLS 中登记的原始列名（财务指标按报告期逐个登记）；
+      ② 宽松匹配：剔除 [日期] 限定段后比对，兜住截数日（如 2022-12-31 的变动）。
+
+    找不到对应列的标准字段会被补充为 NaN 列（后续 DQC 做进一步检查）。
     """
     col_map: dict[str, str] = {}
+
     for std_name, candidates in BOND_COLS.items():
-        for candidate in candidates:
-            if candidate in df.columns:
-                col_map[candidate] = std_name
-                break
+        source = next((c for c in candidates if c in df.columns), None)
+        if source is None:
+            wanted = {_canonical_col_name(c) for c in candidates}
+            source = next(
+                (c for c in df.columns
+                 if c not in col_map and _canonical_col_name(c) in wanted),
+                None,
+            )
+        if source is not None:
+            col_map[source] = std_name
+
     df = df.rename(columns=col_map)
     # 补全缺失的标准列（补 NaN，后续 DQC 会做进一步检查）
     for std_name in BOND_COLS:
@@ -391,11 +435,12 @@ def stg_load_bond_data(
 
     读取策略（优先级从高到低）：
       1. DuckDB 优先：若 db_path 存在且 v_bond 视图可用，从 DuckDB 读取
-         - 速度：~120ms（vs Excel 的 6500ms，快 50 倍）
+         - 速度：百毫秒级（bench4 全国债券宽表冷加载中位 279.0ms）
          - 数据已在 build_warehouse.py 阶段完成归一化和 DQC
          - _active_snapshot 作为缓存 key，版本切换时自动失效
       2. Excel 降级：若 DuckDB 不可用，回退到直接读取 Excel
          - 适用场景：首次部署前、build_warehouse.py 尚未运行时
+         - 速度：秒级（bench3 Q3 旧流程债券读取中位 3.19s）
          - _mtime 作为缓存 key，文件替换时自动失效
 
     缓存策略：

@@ -419,7 +419,7 @@ def mart_partner_network(
     输出：
       (result_df, my_issuers_set)
         result_df 列：主承销商 | 已承做主体数 | 已承做主体列表 | 共同客户数 |共同客户列表 | 合作等级
-        my_issuers_set：我方评级机构的发行人集合
+        my_issuers_set：我方评级机构的发行人集合（仅统计有主承销商的发行人，与 v_partner_network 的 scope 一致）
     """
     scope = df.loc[:, ~df.columns.duplicated()].copy()
     if filter_city:
@@ -428,13 +428,16 @@ def mart_partner_network(
         scope = scope[scope["城投行政级别"] == filter_level]
 
     # 我方已覆盖的发行人
-    mask_subject = scope["主体评级机构"].fillna("").str.contains(my_agency, regex=False)
+    # 与 v_partner_network 的 scope 对齐：要求主承销商非空，视图只统计有承销商的发行人
+    has_uw = scope["主承销商"].fillna("").astype(str).str.strip() != ""
+    scope_mine = scope[has_uw]
+    mask_subject = scope_mine["主体评级机构"].fillna("").str.contains(my_agency, regex=False)
     mask_bond = (
-        scope["债项评级机构"].fillna("").str.contains(my_agency, regex=False)
-        if "债项评级机构" in scope.columns
-        else pd.Series(False, index=scope.index)
+        scope_mine["债项评级机构"].fillna("").str.contains(my_agency, regex=False)
+        if "债项评级机构" in scope_mine.columns
+        else pd.Series(False, index=scope_mine.index)
     )
-    my_issuers: set[str] = set(scope[mask_subject | mask_bond]["发行人中文名称"].dropna())
+    my_issuers: set[str] = set(scope_mine[mask_subject | mask_bond]["发行人中文名称"].dropna())
 
     # 构建承销商 → {全部主体, 共同主体} 映射
     df_uw = scope.dropna(subset=["主承销商"]).copy()
@@ -454,7 +457,7 @@ def mart_partner_network(
             uw_map[uw]["mine"].add(issuer)
 
     if not uw_map:
-        empty_cols = ["主承销商", "共同客户数", "已承做主体数", "共同客户列表", "合作等级"]
+        empty_cols = ["主承销商", "已承做主体数", "已承做主体列表", "共同客户数", "共同客户列表", "合作等级"]
         return pd.DataFrame(columns=empty_cols), my_issuers
 
     rows = []
@@ -463,6 +466,7 @@ def mart_partner_network(
         rows.append({
             "主承销商":     uw,
             "已承做主体数": len(data["total"]),
+            "已承做主体列表": "、".join(sorted(data["total"])),
             "共同客户数":   n,
             "共同客户列表": "、".join(sorted(data["mine"])),
             "合作等级":     "主要合作伙伴" if n >= 2 else ("初步合作对象" if n >= 1 else "待开拓合作关系"),

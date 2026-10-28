@@ -1,11 +1,11 @@
 # scripts/compare_engines_test.py
 # -*- coding: utf-8 -*-
 """
-双引擎一致性对比脚本
+降级一致性对比脚本
 ====================
 按 KPI → Tab 0 → Tab 1 → Tab 2 → Tab 3 顺序，逐 Tab 对比
-DuckDB SQL 引擎 vs pandas 降级引擎的计算结果。
-这个脚本就是为了确保这两个引擎算出来的结果是一致的。
+Excel 降级链路（pandas）与 DuckDB 服务链路（Parquet + SQL 视图）的计算结果。
+目的：确保 DuckDB 不可用时，降级路径算出来的结果与主链路一致。
 
 - KPI    ➔ 比对顶部的总条数、总金额、城市数是否绝对一致。
 - Tab 0  ➔ 比对省内各评级机构的机构数量、市占率。
@@ -15,12 +15,14 @@ DuckDB SQL 引擎 vs pandas 降级引擎的计算结果。
 
 
 设计原则：
-  - DuckDB 是主引擎，pandas 是高可用降级路径（不是"校验器"）
-  - 两边范围必须一致：同一省份、同一筛选条件
+  - DuckDB 与 pandas 是分工关系，不是主备：DuckDB 承担可下推的固化聚合，
+    pandas 承担中间层关联/去重、动态透视、明细筛选、集合运算并负责兜底
+  - 本脚本把 pandas 侧固定在 Excel 降级链路上，直接读 Excel，覆盖完整降级链路
+  - 两边必须同源同版本：同一激活快照、同一省份、同一筛选条件
   - 允许已知的合理误差（例如微小的四舍五入浮点数差异），不判为 FAIL
   - 如果发现对不上的真正不一致，输出具体差异行和数值，说明应修哪一侧：
-     - 如果 DuckDB 算错了 ➔ 去修 `models/marts/` 下面的 `.sql` 视图文件。修完 SQL 先跑 `build_warehouse.py` 刷新数据库，再回来跑本脚本。
-     - 如果 pandas 算错了 ➔ 去修 `mart_*.py` 里的 Python 函数。
+     - DuckDB 侧错 ➔ 修 `models/` 下的 `.sql`，改完先跑 `build_warehouse.py` 再跑本脚本
+     - pandas 侧错 ➔ 修 `mart_*.py`；若错在读取/归一化，则修 `stg_data.py`
    
 
 用法：
@@ -58,16 +60,28 @@ from models.staging.stg_data import (
     stg_load_fiscal_data,
 )
 
+
+def _ensure_utf8_stdio() -> None:
+    """Windows 控制台或输出重定向默认使用 GBK，无法编码 ✅/📋 等字符；统一切到 UTF-8，避免 UnicodeEncodeError。"""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure") and (stream.encoding or "").lower() != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+_ensure_utf8_stdio()
+
 # ── 路径 ──────────────────────────────────────────────────────
 _BASE        = _PROJECT
-BOND_FILE    = max((_BASE / "data" / "raw" / "bond").glob("*.xlsx"),
-                   key=lambda p: p.stat().st_mtime)
 FISCAL_DIR   = _BASE / "data" / "raw" / "fiscal"
 DB_PATH      = _BASE / "data" / "serving" / "credit_indicators.duckdb"
 VERSION_FILE = _BASE / "data" / "serving" / "active_version.json"
 _VERSION     = _read_active_version(VERSION_FILE)
 FISCAL_YEAR  = _VERSION.get("active_fiscal_year", "2021")
 _SNAP        = _VERSION.get("active_bond_snapshot", "")
+
+# 降级侧必须与 DuckDB 侧读同一期数据：按激活快照选 Excel，而不是 mtime 最新
+_BOND_FILES = sorted((_BASE / "data" / "raw" / "bond").glob(f"*{_SNAP}*.xlsx")) if _SNAP else []
+BOND_FILE   = _BOND_FILES[0] if _BOND_FILES else None
 
 # ── ANSI 颜色 ─────────────────────────────────────────────────
 G = "\033[92m"; R = "\033[91m"; Y = "\033[93m"; C = "\033[96m"
@@ -230,14 +244,12 @@ def compare_numeric_col(label: str, pdf: pd.DataFrame, ddf: pd.DataFrame,
 # ══════════════════════════════════════════════════════════════
 
 def build_pandas_data(province: str) -> dict:
-    """跑完整 pandas 数据流，返回各层结果。"""
-    print(f"{C}[pandas] 加载{province}数据...{E}中")
-    df_qg = stg_load_bond_data(BOND_FILE, _mtime=_file_mtime(BOND_FILE),
-                                db_path=DB_PATH, _active_snapshot=_SNAP)
+    """跑完整 Excel 降级链路，返回各层结果。"""
+    print(f"{C}[pandas] Excel 降级路径，加载{province}数据...{E}")
+    df_qg = stg_load_bond_data(BOND_FILE, _mtime=_file_mtime(BOND_FILE))
     fiscal_path = FISCAL_DIR / f"{FISCAL_YEAR}年{province}财力.xlsx"
     df_fiscal = stg_load_fiscal_data(FISCAL_DIR, FISCAL_YEAR, province,
-                                     _mtime=_file_mtime(fiscal_path),
-                                     db_path=DB_PATH, _active_snapshot=_SNAP)
+                                     _mtime=_file_mtime(fiscal_path))
     df_prov = int_filter_province(df_qg, province)
     df_prov = int_join_fiscal(df_prov, df_fiscal)
     sc_zt   = int_build_issuer_view(df_prov)
@@ -592,9 +604,9 @@ def compare_tab3(pdata: dict, province: str, agency: str) -> bool:
         dq_selected = dq_uw[dq_uw["主承销商"] == top_uw_name]
         
         if not pd_selected.empty and not dq_selected.empty:
-            compare_numeric_col(
+            results.append(compare_numeric_col(
                 f"计算出的已承做主体数对比：",
-                pd_selected, dq_selected, "主承销商", "已承做主体数", atol=0)
+                pd_selected, dq_selected, "主承销商", "已承做主体数", atol=0))
     
     # 验证python和duckdb计算的我方客户数是否一致
     # Python 计算
@@ -667,7 +679,7 @@ def compare_tab3(pdata: dict, province: str, agency: str) -> bool:
 
     # 验证python和duckdb计算的共同客户列表是否一致
 
-    if not pd_partner.empty and not dq_partner.empty and 'top_uw_name' in locals():
+    if not pd_partner.empty and not dq_partner.empty and top_uw_name is not None:
         dq_uw_detail = dq_partner[dq_partner["主承销商"] == top_uw_name]
         pd_uw_detail = pd_partner[pd_partner["主承销商"] == top_uw_name]
         
@@ -712,16 +724,20 @@ def main(province: str | None, agency: str) -> None:
     if province is None:
         province = _auto_province()
 
-    print(f"\n{B}双引擎一致性对比  |  省份：{province}  |  机构：{agency[:12]}...{E}")
+    print(f"\n{B}降级一致性对比（Excel 降级 vs DuckDB）  |  省份：{province}  |  机构：{agency[:12]}...{E}")
     print(f"pandas FISCAL_COL = '{FISCAL_COL}'")
     print(f"DuckDB: {'✅ 存在' if DB_PATH.exists() else '❌ 不存在'}")
 
     if not DB_PATH.exists():
         print(f"\n{R}ERROR: 请先运行 python scripts/build_warehouse.py{E}")
         sys.exit(1)
+    if BOND_FILE is None:
+        print(f"\n{R}ERROR: 激活快照 '{_SNAP}' 没有对应的原始 Excel"
+              f"（data/raw/bond/*{_SNAP}*.xlsx），无法做降级对比{E}")
+        sys.exit(1)
 
     pdata = build_pandas_data(province)
-    print(f"Pandas: {'✅ 存在' if DB_PATH.exists() else '❌ 不存在'}")
+    print(f"Excel: {BOND_FILE.name}")
 
     results = {}
     results["KPI"]   = compare_kpi(pdata, province)
@@ -739,7 +755,7 @@ def main(province: str | None, agency: str) -> None:
 
     print()
     if passed == total:
-        print(f"{G}{B}✅ 全部 {total} 项通过，双引擎结果一致。{E}")
+        print(f"{G}{B}✅ 全部 {total} 项通过，降级前后结果一致。{E}")
     else:
         failed = [k for k, v in results.items() if not v]
         print(f"{R}{B}❌ {total-passed}/{total} 项未通过：{failed}{E}")
@@ -751,7 +767,7 @@ def main(province: str | None, agency: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="双引擎一致性对比")
+    parser = argparse.ArgumentParser(description="降级前后一致性对比")
     parser.add_argument("province", nargs="?", default=None,
                         help="目标省份（默认自动选择数据量适中的省）")
     parser.add_argument("--agency", default="中诚信国际信用评级有限责任公司",

@@ -55,3 +55,6 @@ logs/
 
 # 忽略由 scripts/build_warehouse.py 动态生成的和环境绑定的文件(DuckDB服务层)
 data/serving/
+
+# 基准测试可再生临时产物(跑 run_all.py 即可重建)
+benchmark/results/

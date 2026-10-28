@@ -361,9 +361,10 @@ def _cities_by_fiscal(sc_zt: pd.DataFrame) -> list[str]:
 
 
 def _score_val(val: float, bench: dict, col: str) -> int:
+    # 严格大于/小于：恰等于分位值时不算“超过”，落到下一档，与图例 `>Q3 / >中位 / >Q1` 一致
     if col == "资产负债率":
-        return 3 if val <= bench["q1"] else (2 if val <= bench["median"] else (1 if val <= bench["q3"] else 0))
-    return 3 if val >= bench["q3"] else (2 if val >= bench["median"] else (1 if val >= bench["q1"] else 0))
+        return 3 if val < bench["q1"] else (2 if val < bench["median"] else (1 if val < bench["q3"] else 0))
+    return 3 if val > bench["q3"] else (2 if val > bench["median"] else (1 if val > bench["q1"] else 0))
 
 
 def _has_bench(bench: dict) -> bool:
@@ -569,7 +570,7 @@ def build_map_fig(sc_zt: pd.DataFrame, filter_lv="", filter_rt="", fiscal_cities
 # 导出工具
 # ──────────────────────────────────────────────
 
-def build_html_report(case_disp, agency, province, city, lv, rt, fiscal_year) -> str:
+def build_html_report(case_disp, agency, province, city, lv, rt, fiscal_year, bond_due) -> str:
     filters = []
     if city and city != "全部城市":       filters.append(f"城市：{city}")
     if lv   and lv   != "全部级别":       filters.append(f"行政级别：{lv}")
@@ -585,7 +586,7 @@ def build_html_report(case_disp, agency, province, city, lv, rt, fiscal_year) ->
 <title>{agency} — {province}发债案例报告</title>
 <style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f4f8f7;color:#1a3a3a;font-size:13px}}.header{{background:linear-gradient(90deg,#1a3a3a,#2d5a5e 55%,#4a7c7a);padding:24px 36px;color:#fff}}.header h1{{font-size:20px;font-weight:700}}.header p{{font-size:12px;color:rgba(255,255,255,.72);margin-top:5px}}.meta{{display:flex;gap:20px;flex-wrap:wrap;padding:14px 36px;background:#fff;border-bottom:1px solid #d1e0de;font-size:12px}}.meta-item{{color:#5e7e7c}}.meta-item b{{color:#1a3a3a}}.wrap{{padding:20px 36px 40px}}.table-title{{font-size:14px;font-weight:600;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #1a3a3a}}table{{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;font-size:12px}}thead tr{{background:#1a3a3a;color:#fff}}th{{padding:9px 10px;text-align:left;font-weight:600;white-space:nowrap}}td{{padding:8px 10px;border-bottom:1px solid #edf2f2;white-space:nowrap}}tr.alt td{{background:#f7faf9}}tr:hover td{{background:#edf5f4}}.footer{{padding:14px 36px;font-size:11px;color:#9ab8b6;border-top:1px solid #d1e0de;text-align:right}}</style></head><body>
 <div class="header"><h1>{agency} — {province}发债案例报告</h1><p>区域信评展业引擎 · 数据仅供内部使用</p></div>
-<div class="meta"><div class="meta-item">评级机构：<b>{agency}</b></div><div class="meta-item">展业省份：<b>{province}</b></div><div class="meta-item">财力数据年份：<b>{fiscal_year}年</b></div><div class="meta-item">筛选条件：<b>{filter_str}</b></div><div class="meta-item">记录总数：<b>{len(case_disp)} 条</b></div></div>
+<div class="meta"><div class="meta-item">评级机构：<b>{agency}</b></div><div class="meta-item">展业省份：<b>{province}</b></div><div class="meta-item">财力数据年份：<b>{fiscal_year}年</b></div><div class="meta-item">债券数据版本：<b>WIND·截止{bond_due}</b></div><div class="meta-item">筛选条件：<b>{filter_str}</b></div><div class="meta-item">记录总数：<b>{len(case_disp)} 条</b></div></div>
 <div class="wrap"><div class="table-title">发债明细</div><table><thead><tr>{th_html}</tr></thead><tbody>{"".join(rows_html)}</tbody></table></div>
 <div class="footer">生成时间：导出自区域信评展业引擎 · 仅供内部使用，请勿对外传播</div></body></html>"""
 
@@ -618,46 +619,6 @@ def query_duckdb(sql: str, params: list | None = None) -> pd.DataFrame:
     finally:
         con.close()
 
-# 写一个通用的动态 WHERE 拼接函数       
-def _build_where(conditions: dict) -> tuple[str, list]:
-    """
-    构建参数化 WHERE 子句。
-
-    参数：
-        conditions: {"列名": "值", ...}，值为空字符串或 None 表示跳过该条件
-
-    返回：
-        (where_clause, params_list)
-
-    示例：
-        _build_where({"城市": "成都", "主体评级": ""})
-        返回: (" WHERE 城市 = ?", ["成都"])
-    """
-    parts = []
-    params = []
-    for col, val in conditions.items():
-        if val:  # 空字符串或 None 跳过
-            parts.append(f"{col} = ?")
-            params.append(val)
-    
-    where_clause = " AND ".join(parts)
-    return (f" WHERE {where_clause}" if where_clause else "", params)
-
-
-def _duckdb_available() -> bool:
-    """检查 DuckDB 仓库是否已初始化（v_issuer_profile 视图是否可用）。"""
-    if not DB_PATH.exists():
-        return False
-    try:
-        con = duckdb.connect(str(DB_PATH), read_only=True)
-        con.execute("SELECT 1 FROM v_issuer_profile LIMIT 1")
-        con.close()
-        return True
-    except Exception:
-        return False
-
-
-
 
 # ══════════════════════════════════════════════
 # 数据编排：调用三层模型
@@ -668,8 +629,8 @@ def load_bond_data() -> pd.DataFrame:
     Staging 层入口：读取全国城投债。
 
     读取策略（由 stg_load_bond_data 内部决定）：
-      - DuckDB 可用（build_warehouse.py 已运行）→ 从 DuckDB 视图读取，~120ms
-      - DuckDB 不可用 → 降级到 Excel 读取，~6500ms
+      - DuckDB 可用（build_warehouse.py 已运行）→ 从 DuckDB 视图读取，毫秒级
+      - DuckDB 不可用 → 降级到 Excel 读取，秒级
 
     缓存 key 设计：
       - DuckDB 路径：_active_snapshot 版本号变化时失效
@@ -817,37 +778,34 @@ with st.sidebar:
                 province_input = st.text_input("目标省份（精确名称）", value="四川省", label_visibility="collapsed")
     run_btn = st.button("开始分析", type="primary", use_container_width=True, icon=":material/play_arrow:")
     st.markdown("---")
-    # ── 数据源模式指示 ────────────────────────────────────
+    # ── 数据版本与降级提示 ────────────────────────────────
     _using_duckdb = DB_PATH.exists() and bool(_active_snap)
-    _mode_label   = "DuckDB仓库模式" if _using_duckdb else "Excel降级模式"
 
-    st.caption(
-        f'数据读取模式：<code style="font-size: 12px;">{_mode_label}</code>',
-        unsafe_allow_html=True,
-    )   
-    if _using_duckdb:
-
-        st.caption(
-            f'激活快照版本：<code style="font-size: 12px;">{_active_snap}</code>',
-            unsafe_allow_html=True,
-        )
-        _avail = _VERSION.get("bond_snapshots_available", [])
-        if len(_avail) > 1:
-            st.caption(f"可用快照：{', '.join(_avail)}")
-    else:
-        st.caption(f"债券数据：`{BOND_FILE.name}`")
-        st.caption(":material/warning: 提示：运行 `python scripts/build_warehouse.py`")
-        st.caption("可切换至 DuckDB 高性能模式")
+    if not _using_duckdb:
+        st.caption(":material/warning: 当前为 Excel 降级模式，首次分析较慢")
+        st.caption("运行 `python scripts/build_warehouse.py` 可切换至 DuckDB 服务层")
     st.caption(" ")
     st.caption("数据来源说明")
+    st.caption(
+        f'地方财力数据来源：<code style="font-size: 12px;">财汇数据库和统计公报·{FISCAL_YEAR}年度数据</code>',
+        unsafe_allow_html=True, 
+    )   
     st.caption(
         f'债券市场数据来源：<code style="font-size: 12px;">WIND·截止{BOND_DATA_DUE}</code>',
         unsafe_allow_html=True,
     )
-    st.caption(
-        f'地方财力数据来源：<code style="font-size: 12px;">财汇数据库·{FISCAL_YEAR}年度数据</code>',
-        unsafe_allow_html=True,
-    )
+    # ── 可用快照（标出当前激活版本）──
+    _avail = _VERSION.get("bond_snapshots_available", [])
+    if _using_duckdb and len(_avail) > 1:
+        # 当前激活版本排在最前，其余保持原顺序
+        _ordered = sorted(_avail, key=lambda v: v != _active_snap)
+        _avail_str = "、".join(
+            f"{v}（当前）" if v == _active_snap else v for v in _ordered
+        )
+        st.caption(
+            f'可用快照：<code style="font-size: 12px;">{_avail_str}</code>',
+            unsafe_allow_html=True,
+        )
 
 # ══════════════════════════════════════════════
 # 顶部横幅
@@ -935,6 +893,8 @@ if needs_reload:
         _fiscal_df = stg_load_fiscal_data(
             FISCAL_DIR, FISCAL_YEAR, province_input,
             _mtime=_file_mtime(_fiscal_path_pre),
+            db_path=DB_PATH,
+            _active_snapshot=_active_snap,
         )
 
         # ── 财力城市名 DQC 提示 ────────────────────────────
@@ -1065,7 +1025,7 @@ else:
 # ══════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════
-tabs = st.tabs(["评级机构全景", "已评级主体全景", "准入门槛模拟器", "展业帮手圈", "我方评级发债案例"])
+tabs = st.tabs(["评级机构全景", "已评级主体全景", "准入门槛模拟器", "展业帮手圈", "评级发债案例"])
 
 # ────────────────────────────────────────────
 # TAB 0  评级机构全景
@@ -1140,7 +1100,10 @@ with tabs[1]:
     # 复用 staging 缓存（mtime 不变则直接命中，无二次磁盘读取）
     _fiscal_path   = FISCAL_DIR / f"{FISCAL_YEAR}年{prov_name}财力.xlsx"
     _fiscal_df     = stg_load_fiscal_data(FISCAL_DIR, FISCAL_YEAR, prov_name,
-                                          _mtime=_file_mtime(_fiscal_path))
+                                          _mtime=_file_mtime(_fiscal_path),
+                                          db_path=DB_PATH,
+                                          _active_snapshot=_active_snap,
+                                          )
     _fiscal_cities = _fiscal_df["城市"].dropna().tolist() if "城市" in _fiscal_df.columns else []
     map_fig = build_map_fig(sc_zt, "" if map_lv=="全部行政级别" else map_lv, "" if map_rt=="全部信用级别" else map_rt, fiscal_cities=_fiscal_cities)
     map_fig.update_geos(fitbounds="locations", visible=False, resolution=50, showcountries=True, countrycolor="#d1e0de")
@@ -1295,7 +1258,7 @@ with tabs[2]:
                 bt = pd.DataFrame(br)
                 st.dataframe(bt, use_container_width=True, hide_index=True,
                              column_config={c: st.column_config.NumberColumn(format="%.1f") for c in bt.columns if c != "指标"})
-                st.caption("★★★★ >Q3(75%) | ★★★ >中位 | ★★ >Q1(25%) | ★ <Q1")
+                st.caption("★★★★ 优于Q3(75%) | ★★★ 优于中位 | ★★ 优于Q1(25%) | ★ 未优于Q1")
         else:
             st.markdown(
                     """
@@ -1355,10 +1318,11 @@ with tabs[2]:
                     unsafe_allow_html=True
                 )
             else:
-                sm = {4: "★★★★", 3: "★★★", 2: "★★", 1: "★"}
-                cm = {4: "超75%分位，领先市场", 3: "超中位，中游靠前", 2: "超25%分位，中游靠后", 1: "低于25%分位，偏弱"}
+                # 键必须与 _score_val 的返回值（0–3）一致：3=超Q3，2=超中位，1=超Q1，0=低于Q1
+                sm = {3: "★★★★", 2: "★★★", 1: "★★", 0: "★"}
+                cm = {3: "超75%分位，领先市场", 2: "超中位，中游靠前", 1: "超25%分位，中游靠后", 0: "低于25%分位，偏弱"}
                 res_rows = [{"指标": r["指标"], "输入值": f"{r['输入值']}{'%' if r['指标']=='资产负债率' else '亿'}", "市场中位": f"{r['市场中位']}{'%' if r['指标']=='资产负债率' else '亿'}", "竞争力": sm[r["得分"]], "评价": cm[r["得分"]]} for r in scored]
-                st.markdown(":material/fact_check: **财务指标评估结果**")
+                st.markdown(":material/fact_check: **财务指标评估结果（基于选择后的目标市场）**")
                 st.dataframe(pd.DataFrame(res_rows), use_container_width=True, hide_index=True)
 
 # ────────────────────────────────────────────
@@ -1371,19 +1335,14 @@ with tabs[3]:
     with pc2: partner_city = st.selectbox("目标城市", ["全部城市"] + _cities_by_fiscal(sc_zt), key="partner_city")
     with pc3: partner_lv   = st.selectbox("行政级别", ["全部级别"] + sorted(df_sc["城投行政级别"].dropna().unique().tolist(), key=lambda l: ADMIN_ORDER.get(l,-1), reverse=True), key="partner_lv")
 
-    # ── 展业帮手圈：DuckDB View 优先，pandas 降级 ──────────────
+    # ── 展业帮手圈：无筛选走 DuckDB View，有城市/级别筛选走 pandas ──
+    # v_partner_network 仅到「省 × 评级机构 × 承销商」粒度，不含城市/级别，
+    # 因此一旦启用这两个筛选，必须回到 pandas 的 mart_partner_network 才能保证口径正确。
     _partner_city  = "" if partner_city == "全部城市" else partner_city
     _partner_level = "" if partner_lv   == "全部级别"  else partner_lv
 
-    
-    if _using_duckdb:
-        # DuckDB 路径：查询 v_partner_network
-        _where, _params = _build_where({
-            "评级机构":     partner_ag,
-            "城市":         _partner_city,
-            "城投行政级别": _partner_level,
-        })
-
+    if _using_duckdb and not (_partner_city or _partner_level):
+        # DuckDB 路径：默认「全部城市 / 全部级别」
         partner_df = query_duckdb("""
             SELECT
                 主承销商,
@@ -1408,7 +1367,7 @@ with tabs[3]:
         my_issuers = all_common
     
     else:
-        # pandas 降级路径
+        # pandas 路径：无 DuckDB，或用户选择了具体城市/行政级别
         partner_df, my_issuers = mart_partner_network(
             df_sc, partner_ag, _partner_city, _partner_level
         )
@@ -1428,7 +1387,7 @@ with tabs[3]:
         low  = partner_df[partner_df["合作等级"]=="待开拓合作关系"]
         adv1, adv2, adv3 = st.columns(3)
         with adv1:
-            st.markdown("**① 主要合作伙伴**（共同客户≥3）")
+            st.markdown("**① 主要合作伙伴**（共同客户≥2）")
             for _, r in high.iterrows(): st.markdown(f'<div class="rec-g"><b>{r["主承销商"]}</b><br>共同客户：{r["共同客户数"]}家<br><span style="font-size:11px">{r["共同客户列表"]}</span></div>', unsafe_allow_html=True)
             if high.empty: st.caption("暂无")
         with adv2:
@@ -1441,7 +1400,7 @@ with tabs[3]:
             else: st.caption("暂无")
 
 # ────────────────────────────────────────────
-# TAB 4  我方评级发债案例
+# TAB 4  评级发债案例
 # ────────────────────────────────────────────
 with tabs[4]:
     st.markdown('<div class="sec-note">查看指定评级机构在当前省份的受评主体列表及核心财务数据，支持按城市、行政级别、信用级别筛选。</div>', unsafe_allow_html=True)
@@ -1477,7 +1436,7 @@ with tabs[4]:
                                     case_city if case_city!="全部城市" else "",
                                     case_lv   if case_lv!="全部级别" else "",
                                     case_rt   if case_rt!="全部信用级别" else "",
-                                    FISCAL_YEAR).encode("utf-8")
+                                    FISCAL_YEAR, BOND_DATA_DUE).encode("utf-8")
     _fname_parts = [p for p in [my_ags_case, prov_name,
                                  case_city if case_city!="全部城市" else "",
                                  case_lv   if case_lv!="全部级别" else "",
