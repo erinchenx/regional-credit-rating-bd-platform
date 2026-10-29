@@ -2,9 +2,9 @@
 
 > **Regional Credit Rating BD Platform** — 基于轻量湖仓架构的信评展业分析平台
 
-面向信用评级机构的区域展业分析平台。基于 Wind 城投债数据与地方财力数据，平台覆盖评级机构全景、已评级主体全景、准入门槛模拟器、展业帮手圈、评级发债案例（含 HTML 导出）五大核心分析模块，实现从底层数据到展业决策的端到端交付。
+基于 Wind 城投债数据与地方财力数据，平台提供评级机构全景、已评级主体全景、准入门槛模拟器、展业帮手圈、评级发债案例（含 HTML 导出）五大核心分析模块，实现从底层数据到展业决策的端到端交付。
 
-**An end-to-end analytics solution for credit rating agencies built on a modern Lakehouse architecture (Parquet + DuckDB). By standardizing and modeling LGFV bond and local fiscal data from Wind, the platform delivers five core business modules: Credit Rating Landscape, Rated Entity Landscape, Financial Admission Simulator, Partner Network, and Rating Case Studies with HTML export functionality for generating client-ready portable reports. It bridges the gap between raw financial data and strategic business development decisions.**
+**An end-to-end analytics solution for credit rating agencies built on a lightweight Lakehouse architecture (Parquet + DuckDB). By standardizing and modeling LGFV bond and local fiscal data from Wind, the platform delivers five core business modules: Credit Rating Landscape, Rated Entity Landscape, Financial Admission Simulator, Partner Network, and Rating Case Studies with HTML export functionality for generating client-ready portable reports. It bridges the gap between raw financial data and strategic business development decisions.**
 
 ---
 
@@ -26,13 +26,13 @@
 
 本项目是面向信评机构的轻量湖仓分析平台，基于真实金融业务场景构建，为信评机构提供数据驱动的展业支持。
 
-以 Parquet 数据湖 + DuckDB 服务层为轻量湖仓数据底座，应用层由 pandas 承担动态透视、复杂集合运算、明细筛选与降级兜底。以 Streamlit 交付评级机构全景、已评级主体全景、准入门槛模拟器、展业帮手圈、评级发债案例五大分析模块。
+以 Parquet 数据湖 + DuckDB 服务层为轻量湖仓数据底座，应用层由 pandas 承担动态透视、复杂集合运算、明细筛选与降级兜底。以 Streamlit 轻量 UI 框架交付评级机构全景、已评级主体全景、准入门槛模拟器、展业帮手圈、评级发债案例五大核心分析界面。
 
-该平台将分散的 Wind 债券数据，以及来自财汇数据库和统计公报的地方财力数据，转化为标准化、版本化、可多端消费的数据资产，贯穿“竞对博弈、区域研判、券商匹配、准入模拟与案例展示”五大核心场景，同时覆盖市场人员、分析师与管理层的差异化需求。
+该平台将分散的 Wind 债券数据，以及来自财汇数据库和统计公报的地方财力数据，转化为标准化、版本化、可多端消费的数据资产，覆盖“竞对博弈、区域研判、券商匹配、准入模拟与案例展示”五大核心业务场景，同时满足市场人员、分析师与管理层的差异化需求。
 
 | 用户群体 | 核心需求                                                                                                 | 对应功能板块                                                           |
 | -------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 市场人员 | 快速研判区域评级现状、识别竞对薄弱区域与展业突破口、锁定合作券商、评估客户关键指标差距、展示机构成功案例 | 评级机构全景、已评级主体全景、展业帮手圈、准入门槛模拟器、评级发债案例 |
+| 市场人员 | 快速研判区域评级现状、识别竞对薄弱区域与展业突破口、锁定合作券商、评估客户关键指标差距、展示机构成功案例 | 评级机构全景、已评级主体全景、准入门槛模拟器、展业帮手圈、评级发债案例 |
 | 分析师   | 调阅区域已评级主体分布与明细、开展可比主体财务指标对标                                                   | 已评级主体全景、准入门槛模拟器                                         |
 | 管理层   | 跟踪各省份市场占有率变动、评估竞争对手态势，为区域资源配置提供依据                                       | 评级机构全景                                                           |
 
@@ -81,7 +81,7 @@
 
 ## 技术架构
 
-整体采用“Parquet + DuckDB + pandas”的混合架构，以 Parquet + DuckDB 为轻量湖仓数据底座，应用层以 pandas 承担动态透视、复杂集合运算、明细筛选与降级兜底。交付物包括：① Streamlit 决策看板，供业务人员、分析师、管理者直接使用；② 数据底座（`.duckdb` 视图 + Parquet 数据湖），供 BI 与后续应用复用。
+项目以 Parquet + DuckDB 为轻量湖仓数据底座，应用层以 pandas 承担动态透视、复杂集合运算、明细筛选与降级兜底。交付物包括：① Streamlit 决策看板，供业务人员、分析师、管理者直接使用；② 数据底座（`.duckdb` 视图 + Parquet 数据湖），供 BI 与后续应用复用。
 
 ### 总体架构
 
@@ -114,36 +114,41 @@
 
 ### 核心设计：轻量湖仓与混合架构
 
-项目采用 Parquet + DuckDB 轻量湖仓数据底座，存储与计算解耦——Parquet 只存数据，DuckDB 只存 SQL 视图逻辑，二者可独立演进。客户的 IT 团队可以单独升级分析逻辑而不影响已有数据资产，降低维护成本。
+#### 轻量湖仓：数据底座
 
-- **数据可移植性**：`.parquet`文件 是清洗后高性能、标准化的中间层数据资产，具有高拓展性，可被 Spark、Java、R、云平台直接消费。客户未来迁移至 Spark 或云平台时，无需重新清洗数据，保护数据资产的长期价值。
-- **资产化交付**：沉淀的 `.duckdb` 资产既支撑 Streamlit 前端，也可通过官方 ODBC/JDBC 驱动供 Tableau、Power BI、DBeaver 等 BI 工具查询同一套 SQL 视图，并为后续 AI Agent / Text-to-SQL 场景预留统一 SQL 访问层。固定口径指标一次建模、多端复用；动态透视、地图渲染、筛选后的伙伴圈等应用层逻辑，需在 BI 侧基于明细重建。
+项目采用 Parquet + DuckDB 轻量湖仓数据底座，存储与计算解耦——Parquet 只存数据，`.duckdb` 只存视图定义（业务口径），二者可独立演进。客户的 IT 团队可以单独升级分析逻辑而不影响已有数据资产，降低维护成本。
 
-项目采用混合架构，在不同业务场景中采取了差异化的引擎使用策略，不是每个 Tab 都有两套等价的引擎实现：
+- **数据可移植性**：`.parquet` 文件是清洗后高性能、标准化的中间层数据资产，具有高扩展性，可被 Spark、Java、R、云平台直接消费。客户未来迁移至 Spark 或云平台时，无需重新清洗数据，保护数据资产的长期价值。
+- **高性能列存**：Parquet 列式存储，体积较 Excel 缩小约 72%；每期数据经 ETL 预处理为 Parquet，取代运行时 Excel 解析，首次分析完整数据层从约 4.1s 降至 0.70s（约 5.8 倍）。
+- **资产化交付**：沉淀的 `.duckdb` 资产既支撑 Streamlit 前端，也可通过官方 ODBC/JDBC 驱动供 Tableau、Power BI、DBeaver 等 BI 工具查询同一套 SQL 视图，并为后续 AI Agent 场景预留统一 SQL 访问层。固定口径指标一次建模、多端复用；动态透视、地图渲染、筛选后的伙伴圈等应用层逻辑，需在 BI 侧基于明细重建。
 
-* **Parquet（底层存储）** ：列式存储，体积较 Excel 缩小约 72%，实测读取比 Excel 快约 62–769 倍（DuckDB/pandas 两条路径，详见 benchmark/）。以一次性 ETL 替代运行时 Excel 解析，打破 IO 瓶颈，是实现数据层分析提速（首次分析完整数据层从约 4.1s 降至 0.70s，约 5.8 倍）的核心基础。
-* **DuckDB（查询引擎）** ：嵌入式 OLAP，无需服务器；直接扫描 Parquet；负责可下推的高效过滤与聚合、固定 SQL 视图、服务层支撑及外部 BI 数据资产。
-* **pandas（灵活计算）** ：负责动态透视、复杂集合运算等不适合固化为静态 SQL 的场景，并在必要时提供降级兜底。
+> 本项目为单机/嵌入式湖仓，不含 Delta/Iceberg 表格格式层，版本回滚由 Parquet 快照 + active_version.json 实现
 
-三者不是互斥分层：同一个 Tab 可能先用 DuckDB 取数，再由 pandas 做动态透视或筛选。例如 Tab 0 竞争格局热力矩阵和 Tab 4 案例筛选始终由 pandas 完成；Tab 1 的 DuckDB 负责按省取数，城市/级别/评级筛选在 pandas；Tab 3 默认全部城市/级别走 DuckDB，有筛选时走 pandas。
+#### 混合计算：DuckDB 与 pandas 分工协作
+
+项目采用混合架构：DuckDB 与 pandas 是两个并列的计算引擎（引擎 ≠ 层），按各自擅长分工、无主次，不是每个 Tab 都有两套等价的引擎实现：
+
+* **DuckDB**：嵌入式 OLAP，无需服务器；直接扫描 Parquet，执行 `.duckdb` 中的视图定义，承担可下推的过滤与聚合。
+* **pandas**：负责动态透视、复杂集合运算、明细筛选等不适合固化为静态 SQL 的场景，并在必要时提供降级兜底。
+
+两者不是互斥分层：同一个 Tab 可能先用 DuckDB 取数，再由 pandas 做动态透视或筛选。例如 Tab 0 竞争格局热力矩阵和 Tab 4 案例筛选始终由 pandas 完成；Tab 1 的 DuckDB 负责按省取数，城市/级别/评级筛选在 pandas；Tab 3 默认全部城市/级别走 DuckDB，有筛选时走 pandas。
 
 #### 混合架构下各 Tab 实际运行路径
 
-| Tab             | 功能模块            | DuckDB 角色                               | pandas 角色                                                     | 备注                                                                 |
-| --------------- | ------------------- | ----------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **全局**  | 省份 KPI            | `v_province_kpi`                        | 兜底计算                                                        | /                                                                    |
-| **Tab 0** | 评级机构排名表      | `v_agency_market_share`                 | `mart_agency_stats()` 兜底                                    | /                                                                    |
-| **Tab 0** | 饼图 / 柱状图       | 从 `v_agency_market_share` 派生         | 从排名表派生                                                    | /                                                                    |
-| **Tab 0** | 竞争热力矩阵（4维） | `v_bond` 明细（经 `df_sc`）+ 机构名单 | `mart_competition_matrix()`，唯一计算路径                     | 按城市/行政级别/评级/财力段四选一的动态透视不适合固化为静态 SQL 视图 |
-| **Tab 1** | 主体地图 / 名单表   | `v_issuer_profile` 按省取数             | 城市/级别/评级筛选 + 地图构建；兜底 `int_build_issuer_view()` | 筛选与 Plotly 地图在 pandas/UI 层完成                                |
-| **Tab 2** | 准入门槛分位数      | `int_v_issuer_enriched`（内联聚合）     | `mart_financial_bench()` 兜底                                 | `v_financial_bench` 为固定组合视图，供 BI / 测试                   |
-| **Tab 3** | 展业帮手圈          | 默认全部城市/级别走 `v_partner_network` | 有城市/级别筛选时走 `mart_partner_network()`；同时是兜底路径  | 筛选场景没有 DuckDB 等价视图                                         |
-| **Tab 4** | 发债案例明细        | `v_bond` 全量明细（经 `df_sc`）       | 筛选 `df_sc` + HTML 导出，唯一计算路径                        | 应用内不生成专用 SQL 视图                                            |
+| Tab             | 功能模块            | DuckDB 角色                                                   | pandas 角色                                                     | 备注                                                                 |
+| --------------- | ------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **全局**  | 省份 KPI            | `v_province_kpi`                                            | 兜底计算                                                        | /                                                                    |
+| **Tab 0** | 评级机构排名表      | `v_agency_market_share`                                     | `mart_agency_stats()` 兜底                                    | /                                                                    |
+| **Tab 0** | 饼图 / 柱状图       | 从 `v_agency_market_share` 派生                             | 从排名表派生                                                    | /                                                                    |
+| **Tab 0** | 竞争热力矩阵（4维） | `v_bond` 明细 + `v_agency_competitive_landscape` 机构名单 | `mart_competition_matrix(df_sc)`，唯一计算路径                | 按城市/行政级别/评级/财力段四选一的动态透视不适合固化为静态 SQL 视图 |
+| **Tab 1** | 主体地图 / 名单表   | `v_issuer_profile` 按省取数                                 | 城市/级别/评级筛选 + 地图构建；兜底 `int_build_issuer_view()` | 筛选与 Plotly 地图在 pandas/UI 层完成                                |
+| **Tab 2** | 准入门槛分位数      | `int_v_issuer_enriched`（内联聚合）                         | `mart_financial_bench()` 兜底                                 | `v_financial_bench` 为固定组合视图，供 BI / 测试                   |
+| **Tab 3** | 展业帮手圈          | 默认全部城市/级别走 `v_partner_network`                     | 有城市/级别筛选时走 `mart_partner_network()`；同时是兜底路径  | 筛选场景没有 DuckDB 等价视图                                         |
+| **Tab 4** | 发债案例明细        | `v_bond` 全量明细                                           | 筛选 `df_sc` + HTML 导出，唯一计算路径                        | 应用内不生成专用 SQL 视图                                            |
 
 > **说明**：
 > （1）`mart_competition_matrix()` 的动态透视（城市 / 行政级别 / 评级 / 财力段）需要在运行时确定列结构，不适合固化为静态 SQL 视图，因此该模块始终使用 pandas 计算，DuckDB 仅提供原始数据。
 > （2）准入门槛模拟器需要“任意维度通配 + 实时聚合”，而分位数不可加总。`v_financial_bench` = 给 BI 的“固定组合点查”预聚合宽表；`int_v_issuer_enriched` 内联聚合 = 给模拟器的“任意组合（含通配）实时算”。两者粒度、用途不同。
-> （3）表中“唯一路径”表示该功能没有 DuckDB 等价实现，不应在一致性脚本中强行对比。
 
 #### 混合架构下的兜底设计
 
@@ -216,7 +221,7 @@ else:
 │       └── mart_v_partner_network.sql          # 展业伙伴网络（共同客户分析）
 │
 ├── data/
-│   ├── raw/                     # 【原始层】债券 Excel 及 各省财力 Excel
+│   ├── raw/                     # 【原始层】债券 Excel 及各省财力 Excel
 │   │   ├── bond/
 │   │   │    ├── 全国城投债数据_WIND截止20230216.xlsx
 │   │   │    └── 全国城投债数据_WIND截止20230520(虚拟).xlsx
@@ -231,9 +236,9 @@ else:
 │   │   └── fiscal/
 │   │       ├── 四川省_2021.parquet      #  由 build_warehouse.py 运行后生成
 │   │       └── ...
-│   └── serving/                        # 【服务层】DuckDB 文件
-│       ├── credit_indicators.duckdb    #  由 build_warehouse.py 运行后生成
-│       └── active_version.json         #  由 build_warehouse.py 运行后生成
+│   └── serving/                        # 【服务层】目录下两类文件均由 build_warehouse.py 运行后生成
+│       ├── credit_indicators.duckdb    #  语义资产，定义业务口径，供应用层与 BI 查询，由 DuckDB 引擎承载
+│       └── active_version.json         #  版本元数据，记录当前激活快照
 │
 │
 ├── .gitignore                   # Git忽略规则
@@ -294,7 +299,7 @@ python scripts/build_warehouse.py
 ```bash
 python scripts/compare_engines_test.py            # 自动选择数据量适中的省份
 python scripts/compare_engines_test.py 江苏省      # 手动指定省份
-python scripts/compare_engines_test.py 四川省 --agency 中诚信国际信用评级有限责任公司 #默认设置使用中诚信来测试，可以修改
+python scripts/compare_engines_test.py 四川省 --agency 中诚信国际信用评级有限责任公司 # 默认设置使用中诚信来测试，可以修改
 ```
 
 ### 启动应用
@@ -307,7 +312,7 @@ python -m streamlit run app/main.py
 
 侧边栏在仓库未初始化时会提示降级：
 
-- 🟡 **Excel 降级模式**：显示「当前为 Excel 降级模式，首次分析较慢」，自动回退读取并清洗 Excel，为秒级
+- **Excel 降级模式**：显示「当前为 Excel 降级模式，首次分析较慢」，自动回退读取并清洗 Excel，为秒级
 - **DuckDB 仓库模式**：不额外显示模式提示；侧边栏底部展示数据来源与当前激活快照，加载已预清洗的全国债券表为毫秒级
 
 > 精确耗时见 `benchmark/report.md`：Excel 侧看第七节「首次分析 · 完整数据层」，
@@ -464,16 +469,6 @@ con.close()
 
 - **数据主权与解耦：** 交付完整 Python 源码与标准 `.duckdb` 数据库文件，即便未来不使用 Streamlit，客户仍可通过 ODBC/JDBC 接入该底座；交付时需同时提供 Parquet 数据湖，并在目标环境重新注册视图。
 - **工程化可追溯：** 依托 dbt 分层建模思维，每一层指标加工逻辑透明、可审计。
-
-### 交付技术逻辑关联图
-
-| 交付维度           | 技术支撑                                               | 商业收益                                                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **快速交付** | Streamlit 轻量 UI 框架                                 | 以五大功能界面交付，极短上线周期，支持快速原型迭代与 MVP 验证                                                                                                                                                |
-| **高效性能** | Parquet 列存 + 一次性 ETL                              | 以 Parquet 列存的一次性 ETL 取代运行时 Excel 解析：全应用冷启动约 7.2s→1.8s（约 3.9×）；首次分析完整数据层（清缓存、从源文件读起，不含 import/前端）约 4.1s→0.70s（约 5.8×）；省份切换数据层中位约 0.36s |
-| **稳定扩展** | dbt 分层（Staging/Int/Mart）                           | 公共口径单一定义、下游复用，换底层存储只需修改接入层，逻辑层零成本维护                                                                                                                                       |
-| **开放互通** | Parquet 开放格式 + DuckDB SQL 服务层（存储与计算解耦） | 视图与数据独立演进；Parquet 可被 Spark/R/云平台直接消费；DuckDB 经官方 ODBC/JDBC 驱动接入 BI（需安装匹配版本驱动），固定口径一次建模多端复用；为 Agent / Text-to-SQL 预留统一 SQL 接口                       |
-| **版本可控** | 快照版本 + `active_version.json`                     | 每期数据独立保存，一行配置秒级回滚；可回溯任意时间点市场格局，满足审计与复核                                                                                                                                 |
 
 ---
 
